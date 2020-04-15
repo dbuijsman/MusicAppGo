@@ -1,0 +1,45 @@
+package common
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/gorilla/mux"
+)
+
+// TestPostRequest sends a post request to the given handler
+func TestPostRequest(t *testing.T, handler func(http.ResponseWriter, *http.Request), body interface{}) *httptest.ResponseRecorder {
+	bodyRequest, writer := io.Pipe()
+	go func() {
+		err := ToJSON(body, writer)
+		if err != nil {
+			t.Fatalf("Error in test helper: %s", err)
+		}
+		writer.Close()
+	}()
+	request := httptest.NewRequest("POST", "/", bodyRequest)
+	recorder := httptest.NewRecorder()
+	handler(recorder, request)
+	return recorder
+}
+
+// TestGetRequestWithPathVariable sends a get request with a path variable to the given handler
+func TestGetRequestWithPathVariable(t *testing.T, handler func(http.ResponseWriter, *http.Request), pathVariable, pathValue, query string) *httptest.ResponseRecorder {
+	path := fmt.Sprintf("/{%v}", pathVariable)
+	router := mux.NewRouter()
+	getR := router.Methods(http.MethodGet).Subrouter()
+	getR.Path(path).HandlerFunc(handler)
+	var url string
+	if query != "" {
+		url = fmt.Sprintf("/%v?%v", pathValue, query)
+	} else {
+		url = fmt.Sprintf("/%v", pathValue)
+	}
+	request := httptest.NewRequest("GET", url, nil)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	return recorder
+}

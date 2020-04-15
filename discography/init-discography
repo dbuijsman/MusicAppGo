@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+echo Insert username:
+read user
+echo Insert password:
+read -s pass
+sudo mysql -u${user} -p${pass} <<EOF
+CREATE DATABASE IF NOT EXISTS discography;
+USE discography;
+CREATE TABLE IF NOT EXISTS artists (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, name_artist VARCHAR(64) NOT NULL, prefix VARCHAR(7), linkSpotify VARCHAR(128), UNIQUE(name_artist));
+CREATE TABLE IF NOT EXISTS songs (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, name_song VARCHAR(64) NOT NULL, time TIMESTAMP);
+CREATE TABLE IF NOT EXISTS albums (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, name_album VARCHAR(64) NOT NULL, artist_id INT NOT NULL, FOREIGN KEY (artist_id) REFERENCES artists (id) ON UPDATE CASCADE ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS genres (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, name_genre VARCHAR(64) NOT NULL);
+CREATE TABLE IF NOT EXISTS discography (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, artist_id INT NOT NULL, FOREIGN KEY (artist_id) REFERENCES artists (id) ON UPDATE CASCADE ON DELETE CASCADE, song_id INT NOT NULL, FOREIGN KEY (song_id) REFERENCES songs (id) ON UPDATE CASCADE ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS album_track_listing (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, album_id INT NOT NULL, FOREIGN KEY (album_id) REFERENCES albums (id) ON UPDATE CASCADE ON DELETE CASCADE, song_id INT NOT NULL, FOREIGN KEY (song_id) REFERENCES songs (id) ON UPDATE CASCADE ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS song_genre (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, song_id INT NOT NULL, FOREIGN KEY (song_id) REFERENCES songs (id) ON UPDATE CASCADE ON DELETE CASCADE, genre_id INT NOT NULL, FOREIGN KEY (genre_id) REFERENCES genres (id) ON UPDATE CASCADE ON DELETE CASCADE);
+CREATE USER IF NOT EXISTS adminMusicApp IDENTIFIED BY 'admin';
+CREATE USER IF NOT EXISTS readerMusicApp IDENTIFIED BY 'reading...';
+GRANT SELECT, INSERT ON discography.artists TO adminMusicApp;
+GRANT SELECT, INSERT ON discography.songs TO adminMusicApp;
+GRANT SELECT, INSERT ON discography.albums TO adminMusicApp;
+GRANT SELECT, INSERT ON discography.genres TO adminMusicApp;
+GRANT SELECT, INSERT ON discography.discography TO adminMusicApp;
+GRANT SELECT, INSERT ON discography.album_track_listing TO adminMusicApp;
+GRANT SELECT, INSERT ON discography.song_genre TO adminMusicApp;
+GRANT SELECT ON discography.artists TO readerMusicApp;
+GRANT SELECT ON discography.songs TO readerMusicApp;
+GRANT SELECT ON discography.albums TO readerMusicApp;
+GRANT SELECT ON discography.genres TO readerMusicApp;
+GRANT SELECT ON discography.discography TO readerMusicApp;
+GRANT SELECT ON discography.album_track_listing TO readerMusicApp;
+GRANT SELECT ON discography.song_genre TO readerMusicApp;
+EOF
