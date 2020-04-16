@@ -37,3 +37,9 @@ type MultipleArtists struct {
 	Music   []database.RowArtistDB `json: "music"`
 	HasNext bool                   `json: "hasNext"`
 }
+
+// MultipleSongs contains data of songs and a boolean to indicate if there are more results
+type MultipleSongs struct {
+	Music   []database.SongsDB `json: "music"`
+	HasNext bool               `json: "hasNext"`
+}
