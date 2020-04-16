@@ -43,15 +43,30 @@ func (fake testDB) GetArtistsStartingWith(startLetter string, offset, max int) (
 		}
 	}
 	sort.Strings(allResults)
-	if offset >= len(allResults) {
-		return make([]database.RowArtistDB, 0), nil
-	}
 	searchResults := make([]database.RowArtistDB, 0, max)
 	for indexResult := offset; indexResult < int(math.Min(float64(offset+max), float64(len(allResults)))); indexResult++ {
 		searchResults = append(searchResults, fake.artistsDB[allResults[indexResult]])
 	}
 	return searchResults, nil
 }
+
+func (fake testDB) GetSongsFromArtist(artist string, offset, max int) ([]database.RowSongDB, error) {
+	discography := fake.songsDB[artist]
+	name_songs := make([]string, 0, len(discography))
+	for song := range discography {
+		name_songs = append(name_songs, song)
+	}
+	sort.Strings(name_songs)
+	searchResults := make([]database.RowSongDB, 0, max)
+	for indexResult := offset; indexResult < int(math.Min(float64(offset+max), float64(len(name_songs)))); indexResult++ {
+		song := discography[name_songs[indexResult]]
+		for _, artist := range song.Artists {
+			searchResults = append(searchResults, database.RowSongDB{ArtistName: artist.Artist, ArtistPrefix: artist.Prefix, SongName: song.Song})
+		}
+	}
+	return searchResults, nil
+}
+
 func (fake testDB) FindArtist(name string) (database.RowArtistDB, error) {
 	artist, ok := fake.artistsDB[name]
 	if !ok {

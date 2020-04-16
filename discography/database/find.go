@@ -27,6 +27,25 @@ func (db *MusicDB) GetArtistsStartingWith(startLetter string, offset, max int) (
 	return returningResults, nil
 }
 
+//GetSongsFromArtist finds songs of the given artist ordered by name of the song. The results are not yet combined (i.e. if multiple artists contributed on one song).
+func (db *MusicDB) GetSongsFromArtist(artist string, offset, max int) ([]RowSongDB, error) {
+	// This query is a cross join between artists, discography and a subquery that selects the songs of an artist
+	results, err := db.database.Query("SELECT artists.id, name_artist, prefix, songsOfArtist.song_id, name_song FROM artists, discography CROSS JOIN (SELECT song_id, name_song FROM artists, discography, songs WHERE name_artist=? AND songs.id=song_id AND artists.id=artist_id ORDER BY name_song LIMIT ?,?) AS songsOfArtist ON discography.song_id=songsOfArtist.song_id WHERE artists.id=artist_id AND songsOfArtist.song_id=discography.song_id ORDER BY name_song;", artist, offset, max)
+	if err != nil {
+		return nil, common.GetDBError(err.Error(), common.UnknownError)
+	}
+	returningResults := make([]RowSongDB, 0)
+	for results.Next() {
+		var song RowSongDB
+		err = results.Scan(&song.ArtistID, &song.ArtistName, &song.ArtistPrefix, &song.SongID, &song.SongName)
+		if err != nil {
+			return nil, common.GetDBError(err.Error(), common.ScannerError)
+		}
+		returningResults = append(returningResults, song)
+	}
+	return returningResults, nil
+}
+
 // FindArtist searches the database for the artist. This function expects a name without prefix.
 func (db *MusicDB) FindArtist(name string) (RowArtistDB, error) {
 	result := db.database.QueryRow("SELECT id, name_artist, prefix FROM artists WHERE name_artist=? LIMIT 1;", name)
