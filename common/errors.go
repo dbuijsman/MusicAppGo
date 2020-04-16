@@ -13,11 +13,17 @@ func (err DBError) Error() string {
 // DuplicateEntry is errorcode for duplicate entries
 const DuplicateEntry int = 2
 
-// UnknownError is errorcode for unspecified errors
-const UnknownError int = 500
-
 // InvalidOffsetMax is errorcode for requests with an invalid offset or invalid max
 const InvalidOffsetMax int = 400
+
+// IncompleteInput is errorcode when the given values can not be saved in the database
+const IncompleteInput int = 401
+
+// NotFoundError is errorcode if the requested entry can not be found
+const NotFoundError int = 404
+
+// UnknownError is errorcode for unspecified errors
+const UnknownError int = 500
 
 // ScannerError is errorcode for requests where there went something wrong with scanning the rows
 const ScannerError int = 510
