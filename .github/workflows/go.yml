@@ -21,15 +21,17 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Get dependencies
-      run: 
-      cd common && go get -v -t -d ./... && cd ..
-      cd users && go get -v -t -d ./... && cd ..
-      cd discography && go get -v -t -d ./... && cd ..
+      run: |
+            cd common && go get -v -t -d ./... && cd ..
+            cd users && go get -v -t -d ./... && cd ..
+            cd discography && go get -v -t -d ./... && cd ..
 
     - name: Build
-      run: cd common && go build . && cd ..
+      run: |
+           cd common && go build . && cd ..
            cd users && go build . && cd ..
            cd discography && go build && cd ..
     - name: Test
-      run: cd users && go test ./test && cd ..
+      run: |
+           cd users && go test ./test && cd ..
            cd discogahpy && go test ./test && cd ..
