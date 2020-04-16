@@ -3,15 +3,13 @@ package handlers
 import (
 	"MusicAppGo/common"
 	"net/http"
-	"strconv"
 
 	"github.com/gorilla/mux"
 )
 
 // ArtistStartingWith searches the database for artists that satisfies the criria
 func (handler *MusicHandler) ArtistStartingWith(response http.ResponseWriter, request *http.Request) {
-	vars := mux.Vars(request)
-	firstLetter := vars["firstLetter"]
+	firstLetter := mux.Vars(request)["firstLetter"]
 	if firstLetter == "" {
 		badRequests.Inc()
 		handler.Logger.Printf("Got request with no first letter\n")
@@ -22,26 +20,12 @@ func (handler *MusicHandler) ArtistStartingWith(response http.ResponseWriter, re
 		handler.Logger.Printf("[Error] Trying to request non-implemented case %v\n", firstLetter)
 		http.Error(response, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
 	}
-	queries := request.URL.Query()
-	query := queries.Get("offset")
-	offset, err := strconv.Atoi(query)
-	if query != "" && err != nil {
+	offset, max, err := common.GetOffsetMaxFromRequest(request)
+	if err != nil {
 		badRequests.Inc()
-		handler.Logger.Printf("Got request with invalid value for offset: %s\n", err)
+		handler.Logger.Printf("%s\n", err)
 		http.Error(response, "Invalid query value.", http.StatusBadRequest)
 		return
-	}
-	query = queries.Get("max")
-	var max int
-	max, err = strconv.Atoi(query)
-	if query != "" && err != nil {
-		badRequests.Inc()
-		handler.Logger.Printf("Got request with invalid value for max: %s\n", err)
-		http.Error(response, "Invalid query value.", http.StatusBadRequest)
-		return
-	}
-	if query == "" {
-		max = 20
 	}
 	results, errorSearch := handler.db.GetArtistsStartingWith(firstLetter, offset, max+1)
 	if errorSearch != nil {
