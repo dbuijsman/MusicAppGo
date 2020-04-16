@@ -1,7 +1,7 @@
 package database
 
 import (
-	"common"
+	"MusicAppGo/common"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha512"

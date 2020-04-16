@@ -1,8 +1,7 @@
 package database
 
 import (
-	"common"
-	"fmt"
+	"MusicAppGo/common"
 )
 
 // AddArtist adds a new artist to the database
@@ -21,8 +20,13 @@ func (db *MusicDB) AddArtist(artist, prefix, linkSpotify string) error {
 func (db *MusicDB) AddSong(song RowSongDB) error {
 	for index, artist := range song.Artists {
 		if artist.ID == 0 {
-			fmt.Println(index)
+			newArtist, err := db.FindArtist(artist.Artist)
+			if err != nil {
+				return err
+			}
+			song.Artists[index] = newArtist
 		}
 	}
+
 	return nil
 }

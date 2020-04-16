@@ -3,7 +3,7 @@ module users
 go 1.14
 
 require (
-	common v1.0.0
+	MusicAppGo/common v1.0.0
 	github.com/go-playground/universal-translator v0.17.0 // indirect
 	github.com/go-playground/validator v9.31.0+incompatible // indirect
 	github.com/go-sql-driver/mysql v1.5.0
@@ -12,4 +12,4 @@ require (
 	github.com/prometheus/client_golang v1.5.1
 )
 
-replace common => ../common
+replace MusicAppGo/common => ../common

@@ -1,7 +1,7 @@
 package test
 
 import (
-	"common"
+	"MusicAppGo/common"
 	"discography/handlers"
 	"fmt"
 	"net/http"

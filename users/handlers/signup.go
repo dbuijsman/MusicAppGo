@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"common"
+	"MusicAppGo/common"
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus"

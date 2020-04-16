@@ -1,7 +1,7 @@
 package database
 
 import (
-	"common"
+	"MusicAppGo/common"
 )
 
 // GetArtistsStartingWith finds all artists that starts with a certain string
@@ -35,4 +35,9 @@ func (db *MusicDB) FindArtist(name string) (RowArtistDB, error) {
 		return RowArtistDB{}, common.GetDBError(err.Error(), common.UnknownError)
 	}
 	return artist, nil
+}
+
+// FindSong searches the database for the given song. This function expects an artist name without prefix.
+func (db *MusicDB) FindSong(artist, song string) (RowSongDB, error) {
+	return RowSongDB{}, nil
 }

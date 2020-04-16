@@ -1,7 +1,7 @@
 package test
 
 import (
-	"common"
+	"MusicAppGo/common"
 	"discography/database"
 	"discography/handlers"
 	"log"
