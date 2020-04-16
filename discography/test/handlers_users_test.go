@@ -40,8 +40,8 @@ func TestArtistStartingWith_amountResults(t *testing.T) {
 	}{
 		"Artist without prefix with right first letter":         {[]string{"Bob Dylan"}, "B", 0, 10, 1},
 		"Artist with prefix with right first letter":            {[]string{"The Beatles"}, "B", 0, 10, 1},
-		"Prefix does not count as a first letter":               {[]string{"The Beatles"}, "T", 0, 10, 0},
-		"Only the first letter counts":                          {[]string{"Bob Dylan"}, "D", 0, 10, 0},
+		"Prefix does not count as a first letter":               {[]string{"Tenacious D", "The Beatles"}, "T", 0, 10, 1},
+		"Only the first letter counts":                          {[]string{"D12", "Bob Dylan"}, "D", 0, 10, 1},
 		"Multiple artists with right first letter":              {[]string{"The Beatles", "The Bee Gees", "Bob Dylan"}, "B", 0, 10, 3},
 		"Amount of results capped by max":                       {[]string{"The Beatles", "The Bee Gees", "Bob Dylan"}, "B", 0, 2, 2},
 		"Skip amount of results given by offset":                {[]string{"The Beatles", "The Bee Gees", "Bob Dylan"}, "B", 2, 10, 1},
@@ -58,6 +58,7 @@ func TestArtistStartingWith_amountResults(t *testing.T) {
 		var result handlers.MultipleArtists
 		err := common.FromJSON(&result, response.Body)
 		if err != nil {
+			fmt.Println(response.Code)
 			t.Fatalf("[ERROR] %v: Decoding response: %v\n", nameCase, err)
 		}
 		if len(result.Music) != discography.expectedAmountResults {
