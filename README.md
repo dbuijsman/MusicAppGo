@@ -5,14 +5,25 @@ With this application users can discover new music. Users can like and dislike s
 
 TO Do:
 Adding new songs to the music database
+
 Adding new albums to the music database
+
 Adding extra tags to songs or albums (e.g. genres)
+
 Adding handlers for searching the music database
+
 Adding handlers for likes, dislikes and follow
+
 Adding suggestion system
+
 Sending notifications about new music
+
 Updating the music database via Spotify
+
 Adding events (i.e. a new user signs up)
+
 Create configuration files for every service)
+
 Creating Docker images of every service
+
 Adding front-end and connecting this to the back-end.
