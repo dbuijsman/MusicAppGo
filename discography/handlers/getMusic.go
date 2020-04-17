@@ -6,15 +6,6 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-)
-
-var (
-	failureSearchRequest = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "discography_failed_search_request_total",
-		Help: "The total number of failed requests to find artists or songs that satisfies the requirements",
-	})
 )
 
 // ArtistStartingWith searches the database for artists that satisfies the criria
@@ -67,12 +58,6 @@ func (handler *MusicHandler) ArtistStartingWith(response http.ResponseWriter, re
 // SongsFromArtist returns a set of songs from the requested artist
 func (handler *MusicHandler) SongsFromArtist(response http.ResponseWriter, request *http.Request) {
 	nameArtist := mux.Vars(request)["artist"]
-	// if name_artist == "" {
-	// 	badRequests.Inc()
-	// 	handler.Logger.Printf("Got request with no artist\n")
-	// 	http.Error(response, "Bad request.", http.StatusBadRequest)
-	// 	return
-	// }
 	offset, max, err := common.GetOffsetMaxFromRequest(request)
 	if err != nil {
 		badRequests.Inc()

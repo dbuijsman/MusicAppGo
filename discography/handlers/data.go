@@ -26,6 +26,13 @@ var (
 	})
 )
 
+var (
+	failureSearchRequest = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "discography_failed_search_request_total",
+		Help: "The total number of failed requests to find artists or songs that satisfies the requirements",
+	})
+)
+
 // NewArtist will be the form of a new artist that will be added to the database
 type NewArtist struct {
 	Name        string `json:"name" validate:"required"`

@@ -10,22 +10,26 @@ import (
 
 func TestArtistStartingWith_statusCode(t *testing.T) {
 	cases := map[string]struct {
+		artists            []string
+		firstLetter        string
 		offset, max        string
 		expectedStatusCode int
 	}{
-		"Negative offset":        {"-1", "10", http.StatusBadRequest},
-		"Negative max":           {"0", "-1", http.StatusBadRequest},
-		"Correct offset and max": {"1", "10", http.StatusOK},
-		"Default offset and max": {"0", "20", http.StatusOK},
-		"Offset is NaN":          {"text", "10", http.StatusBadRequest},
-		"Max is NaN":             {"0", "text", http.StatusBadRequest},
+		"Negative offset":        {[]string{"Dio", "Disturbed"}, "D", "-1", "10", http.StatusBadRequest},
+		"Negative max":           {[]string{"Dio", "Disturbed"}, "D", "0", "-1", http.StatusBadRequest},
+		"Correct offset and max": {[]string{"Dio", "Disturbed"}, "D", "1", "10", http.StatusOK},
+		"Default offset and max": {[]string{"Dio", "Disturbed"}, "D", "0", "20", http.StatusOK},
+		"Offset is NaN":          {[]string{"Dio", "Disturbed"}, "D", "text", "10", http.StatusBadRequest},
+		"Max is NaN":             {[]string{"Dio", "Disturbed"}, "D", "0", "text", http.StatusBadRequest},
+		"No artist is found":     {[]string{"Dio", "Disturbed"}, "Q", "0", "10", http.StatusNotFound},
 	}
 	for nameCase, queryValues := range cases {
 		handler := testMusicHandler()
-		common.TestPostRequest(t, handler.AddArtist, handlers.NewArtist{Name: "Disturbed"})
-		common.TestPostRequest(t, handler.AddArtist, handlers.NewArtist{Name: "Dio"})
+		for _, nameArtist := range queryValues.artists {
+			common.TestPostRequest(t, handler.AddArtist, handlers.NewArtist{Name: nameArtist})
+		}
 		query := fmt.Sprintf("offset=%v&max=%v", queryValues.offset, queryValues.max)
-		response := common.TestGetRequestWithPathVariable(t, handler.ArtistStartingWith, "firstLetter", "D", query)
+		response := common.TestGetRequestWithPathVariable(t, handler.ArtistStartingWith, "firstLetter", queryValues.firstLetter, query)
 		if response.Code != queryValues.expectedStatusCode {
 			t.Errorf("%v: Expects statuscode %v but got %v\n", nameCase, queryValues.expectedStatusCode, response.Code)
 		}
@@ -40,8 +44,8 @@ func TestArtistStartingWith_amountResults(t *testing.T) {
 	}{
 		"Artist without prefix with right first letter":         {[]string{"Bob Dylan"}, "B", 0, 10, 1},
 		"Artist with prefix with right first letter":            {[]string{"The Beatles"}, "B", 0, 10, 1},
-		"Prefix does not count as a first letter":               {[]string{"Tenacious D", "The Beatles"}, "T", 0, 10, 1},
-		"Only the first letter counts":                          {[]string{"D12", "Bob Dylan"}, "D", 0, 10, 1},
+		"Prefix does not count as a first letter":               {[]string{"The Beatles", "Tenacious D"}, "T", 0, 10, 1},
+		"Only the first letter counts":                          {[]string{"Bob Dylan", "D12"}, "D", 0, 10, 1},
 		"Multiple artists with right first letter":              {[]string{"The Beatles", "The Bee Gees", "Bob Dylan"}, "B", 0, 10, 3},
 		"Amount of results capped by max":                       {[]string{"The Beatles", "The Bee Gees", "Bob Dylan"}, "B", 0, 2, 2},
 		"Skip amount of results given by offset":                {[]string{"The Beatles", "The Bee Gees", "Bob Dylan"}, "B", 2, 10, 1},
