@@ -92,11 +92,15 @@ func TestSignUp_sendMessage(t *testing.T) {
 	creds := handlers.Credentials{Username: "Test", Password: "Testing"}
 	expectedTopic, expectedMessage := "signup", creds.Username
 	handler := testUserHandler()
+	var wg sync.WaitGroup
+	wg.Add(1)
 	handler.SendMessage = func(topic string, message []byte) {
 		*top = topic
 		*msg = string(message)
+		wg.Done()
 	}
 	common.TestPostRequest(t, handler.SignUp, creds)
+	wg.Wait()
 	if *top != expectedTopic {
 		t.Errorf("Signup expects to send a message to topic %v but instead it was send to %v\n", expectedTopic, *top)
 	}
