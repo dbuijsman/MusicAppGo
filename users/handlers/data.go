@@ -16,13 +16,18 @@ type Credentials struct {
 
 // UserHandler consists of a logger and a database
 type UserHandler struct {
-	Logger *log.Logger
-	db     database.Database
+	Logger      *log.Logger
+	db          database.Database
+	SendMessage func(string, []byte)
 }
 
 //NewUserHandler returns a UserHandler
-func NewUserHandler(l *log.Logger, db database.Database) *UserHandler {
-	return &UserHandler{Logger: l, db: db}
+func NewUserHandler(l *log.Logger, db database.Database, sendMessage func(string, []byte) error) *UserHandler {
+	return &UserHandler{Logger: l, db: db, SendMessage: func(topic string, message []byte) {
+		if err := sendMessage(topic, message); err != nil {
+			l.Printf("Topic %v: Can't send message %v: %v\n", topic, message, err)
+		}
+	}}
 }
 
 var (

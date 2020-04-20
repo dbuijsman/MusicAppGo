@@ -1,6 +1,7 @@
 package common
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 
@@ -11,6 +12,16 @@ import (
 func ToJSON(i interface{}, w io.Writer) error {
 	e := json.NewEncoder(w)
 	return e.Encode(i)
+}
+
+// ToJSONBytes serializes the given interface into a byte array and returns the results
+func ToJSONBytes(i interface{}) ([]byte, error) {
+	buf := new(bytes.Buffer)
+	err := ToJSON(i, buf)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // FromJSON deserializes the object from JSON string

@@ -42,6 +42,7 @@ func (handler *UserHandler) SignUp(response http.ResponseWriter, request *http.R
 		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
+	go handler.SendMessage("signup", []byte(creds.Username))
 	handler.Logger.Printf("Succesfully added new user %v\n", creds.Username)
 	succesSignUps.Inc()
 	token, err := common.CreateToken(creds.Username)

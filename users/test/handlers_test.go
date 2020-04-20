@@ -4,6 +4,7 @@ import (
 	"MusicAppGo/common"
 	"log"
 	"net/http"
+	"sync"
 	"testing"
 	"users/handlers"
 )
@@ -37,7 +38,9 @@ func TestSignUp_savingInDB(t *testing.T) {
 	for nameCase, credentials := range cases {
 		l := log.New(testWriter{}, "TEST", log.LstdFlags|log.Lshortfile)
 		db := testDB{db: make(map[string]string)}
-		handler := handlers.NewUserHandler(l, db).SignUp
+		handler := handlers.NewUserHandler(l, db, func(topic string, message []byte) error {
+			return nil
+		}).SignUp
 		common.TestPostRequest(t, handler, handlers.Credentials{Username: credentials.username, Password: credentials.password})
 		_, result := db.db[credentials.username]
 		if result != credentials.expected {
@@ -83,7 +86,24 @@ func TestSignUp_duplicateEntry(t *testing.T) {
 		}
 	}
 }
-
+func TestSignUp_sendMessage(t *testing.T) {
+	topicValue, msgValue := "", ""
+	top, msg := &topicValue, &msgValue
+	creds := handlers.Credentials{Username: "Test", Password: "Testing"}
+	expectedTopic, expectedMessage := "signup", creds.Username
+	handler := testUserHandler()
+	handler.SendMessage = func(topic string, message []byte) {
+		*top = topic
+		*msg = string(message)
+	}
+	common.TestPostRequest(t, handler.SignUp, creds)
+	if *top != expectedTopic {
+		t.Errorf("Signup expects to send a message to topic %v but instead it was send to %v\n", expectedTopic, *top)
+	}
+	if *msg != expectedMessage {
+		t.Errorf("Signup expects to send username %v as message but instead it sends: %v\n", expectedMessage, *msg)
+	}
+}
 func TestLogin_statusCode(t *testing.T) {
 	creds := handlers.Credentials{Username: "Test", Password: "Testing"}
 	cases := map[string]struct {
@@ -125,5 +145,28 @@ func TestLogin_returningValidToken(t *testing.T) {
 		if result != credentials.expected {
 			t.Errorf("%v, Login with username: %v and password: %v after base case expects valid token: %v but got: %v\n", nameCase, credentials.username, credentials.password, credentials.expected, result)
 		}
+	}
+}
+func TestLogin_sendMessage(t *testing.T) {
+	topicValue, msgValue := "", ""
+	top, msg := &topicValue, &msgValue
+	creds := handlers.Credentials{Username: "Test", Password: "Testing"}
+	expectedTopic, expectedMessage := "login", creds.Username
+	handler := testUserHandler()
+	common.TestPostRequest(t, handler.SignUp, creds)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	handler.SendMessage = func(topic string, message []byte) {
+		*top = topic
+		*msg = string(message)
+		wg.Done()
+	}
+	common.TestPostRequest(t, handler.Login, creds)
+	wg.Wait()
+	if *top != expectedTopic {
+		t.Errorf("Login expects to send a message to topic %v but instead it was send to %v\n", expectedTopic, *top)
+	}
+	if *msg != expectedMessage {
+		t.Errorf("Login expects to send username %v as message but instead it sends: %v\n", expectedMessage, *msg)
 	}
 }

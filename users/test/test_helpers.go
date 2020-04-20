@@ -11,7 +11,9 @@ import (
 
 func testUserHandler() *handlers.UserHandler {
 	l := log.New(testWriter{}, "TEST", log.LstdFlags|log.Lshortfile)
-	return handlers.NewUserHandler(l, testDB{db: make(map[string]string)})
+	return handlers.NewUserHandler(l, testDB{db: make(map[string]string)}, func(topic string, message []byte) error {
+		return nil
+	})
 }
 
 type testWriter struct{}

@@ -42,6 +42,7 @@ func (handler *UserHandler) Login(response http.ResponseWriter, request *http.Re
 		http.Error(response, "Username and password do not match.", http.StatusUnauthorized)
 		return
 	}
+	go handler.SendMessage("login", []byte(creds.Username))
 	handler.Logger.Printf("User %v succesfully logged in\n", creds.Username)
 	succesLoggin.Inc()
 	token, err := common.CreateToken(creds.Username)
