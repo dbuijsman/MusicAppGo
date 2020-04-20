@@ -2,9 +2,11 @@ package test
 
 import (
 	"MusicAppGo/common"
+	"discography/database"
 	"discography/handlers"
 	"log"
 	"net/http"
+	"sync"
 	"testing"
 )
 
@@ -20,8 +22,10 @@ func TestAddArtist_savingInDB(t *testing.T) {
 	for nameCase, newArtist := range cases {
 		l := log.New(testWriter{}, "TEST", log.LstdFlags|log.Lshortfile)
 		db := newTestDB()
-		handler := handlers.NewMusicHandler(l, db).AddArtist
-		common.TestPostRequest(t, handler, handlers.NewArtist{Name: newArtist.nameArtist})
+		handler := handlers.NewMusicHandler(l, db, func(topic string, message []byte) error {
+			return nil
+		})
+		common.TestPostRequest(t, handler.AddArtist, handlers.NewArtist{Name: newArtist.nameArtist})
 		result := db.artistsDB[newArtist.expectedName]
 		if result.Artist != newArtist.expectedName {
 			t.Errorf("Admin adding new artist: %v expects name: %v but got: %v\n", newArtist.nameArtist, newArtist.expectedName, result.Artist)
@@ -68,6 +72,32 @@ func TestAddArtist_duplicateEntry(t *testing.T) {
 		}
 	}
 }
+func TestAddArtist_sendMessage(t *testing.T) {
+	topicValue, msgValue := "", ""
+	top, msg := &topicValue, &msgValue
+	artist := handlers.NewArtist{Name: "Pendulum"}
+	expectedTopic := "newArtist"
+	expectedMessage, err := common.ToJSONBytes(database.NewRowArtistDB(0, artist.Name, ""))
+	if err != nil {
+		t.Fatalf("[ERROR] Can't serialize %v to expected message:%s\n", artist.Name, err)
+	}
+	handler := testMusicHandler()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	handler.SendMessage = func(topic string, message []byte) {
+		*top = topic
+		*msg = string(message)
+		wg.Done()
+	}
+	common.TestPostRequest(t, handler.AddArtist, artist)
+	wg.Wait()
+	if *top != expectedTopic {
+		t.Errorf("Adding an artist expects to send a message to topic %v but instead it was send to %v\n", expectedTopic, *top)
+	}
+	if *msg != string(expectedMessage) {
+		t.Errorf("Adding an artist expects to send artist %v as message but instead it sends: %v\n", string(expectedMessage), *msg)
+	}
+}
 
 func TestAddSong_savingInDB(t *testing.T) {
 	cases := map[string]struct {
@@ -89,7 +119,9 @@ func TestAddSong_savingInDB(t *testing.T) {
 	for nameCase, newSong := range cases {
 		l := log.New(testWriter{}, "TEST", log.LstdFlags|log.Lshortfile)
 		db := newTestDB()
-		handler := handlers.NewMusicHandler(l, db)
+		handler := handlers.NewMusicHandler(l, db, func(topic string, message []byte) error {
+			return nil
+		})
 		for _, artist := range newSong.existingArtists {
 			common.TestPostRequest(t, handler.AddArtist, handlers.NewArtist{Name: artist})
 		}
@@ -114,7 +146,6 @@ func TestAddSong_duplicateInput(t *testing.T) {
 	}
 	for nameCase, newSong := range cases {
 		handler := testMusicHandler()
-		//handler.Logger = log.New(os.Stdout, "TEST", log.LstdFlags|log.Lshortfile)
 		handler.AddSong(someSong.song, someSong.artist)
 		_, err := handler.AddSong(newSong.song, newSong.artists...)
 		if newSong.expectedErrorCode == 0 {
@@ -130,5 +161,33 @@ func TestAddSong_duplicateInput(t *testing.T) {
 		if errorcode := err.(common.DBError).ErrorCode; errorcode != newSong.expectedErrorCode {
 			t.Errorf("%v: Expected errorcode: %v but got: %v\n", nameCase, newSong.expectedErrorCode, errorcode)
 		}
+	}
+}
+func TestAddSong_sendMessage(t *testing.T) {
+	topicValue, msgValue := "", ""
+	top, msg := &topicValue, &msgValue
+	song := struct{ artist, song string }{"Billy Talent", "Fallen Leaves"}
+	songAsSongDB := database.NewSongDB(0, song.song)
+	songAsSongDB.Artists = append(songAsSongDB.Artists, database.NewRowArtistDB(0, song.artist, ""))
+	expectedTopic := "newSong"
+	expectedMessage, err := common.ToJSONBytes(songAsSongDB)
+	if err != nil {
+		t.Fatalf("[ERROR] Can't serialize %v - %v to expected message:%s\n", song.artist, song.song, err)
+	}
+	handler := testMusicHandler()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	handler.SendMessage = func(topic string, message []byte) {
+		*top = topic
+		*msg = string(message)
+		wg.Done()
+	}
+	handler.AddSong(song.song, song.artist)
+	wg.Wait()
+	if *top != expectedTopic {
+		t.Errorf("Adding an artist expects to send a message to topic %v but instead it was send to %v\n", expectedTopic, *top)
+	}
+	if *msg != string(expectedMessage) {
+		t.Errorf("Adding an artist expects to send artist %v as message but instead it sends: %v\n", string(expectedMessage), *msg)
 	}
 }

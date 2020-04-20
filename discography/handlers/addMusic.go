@@ -45,6 +45,14 @@ func (handler *MusicHandler) AddArtist(response http.ResponseWriter, request *ht
 		http.Error(response, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+	go func(handler *MusicHandler, artist, prefix string) {
+		msg, err := common.ToJSONBytes(database.NewRowArtistDB(0, artist, prefix))
+		if err != nil {
+			handler.Logger.Printf("[ERROR] Failed to convert %v %v to bytes: %v\n", prefix, artist, err)
+			return
+		}
+		handler.SendMessage("newArtist", msg)
+	}(handler, artist, prefix)
 	handler.Logger.Printf("Succesfully added new artist %v\n", artist)
 	succesNewArtist.Inc()
 	response.WriteHeader(http.StatusOK)
@@ -106,7 +114,17 @@ func (handler *MusicHandler) AddSong(song string, artists ...string) (database.S
 		handler.Logger.Printf("[ERROR] Failed to add new song %v - %v to database: %v\n", contributingArtists[0].Artist, song, err)
 		failedNewSong.Inc()
 	} else {
-		handler.Logger.Printf("Succsefully added new song %v - %v\n", contributingArtists[0].Artist, song)
+		go func(handler *MusicHandler, artists []database.RowArtistDB, song string) {
+			newSong := database.NewSongDB(0, song)
+			newSong.Artists = artists
+			msg, err := common.ToJSONBytes(newSong)
+			if err != nil {
+				handler.Logger.Printf("[ERROR] Failed to convert %v - %v to bytes: %v\n", contributingArtists, song, err)
+				return
+			}
+			handler.SendMessage("newSong", msg)
+		}(handler, contributingArtists, song)
+		handler.Logger.Printf("Succsefully added new song %v - %v\n", contributingArtists, song)
 		succesNewSong.Inc()
 	}
 	return newSong, err
