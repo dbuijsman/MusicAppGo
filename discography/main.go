@@ -1,6 +1,7 @@
 package main
 
 import (
+	"MusicAppGo/common"
 	"context"
 	"log"
 	"net/http"
@@ -72,7 +73,9 @@ func initRoutes(logger *log.Logger, db *sql.DB) *mux.Router {
 
 	handler := handlers.NewMusicHandler(logger, database.NewMusicDB(db))
 	getR := router.Methods(http.MethodGet).Subrouter()
-	getR.Path("/artist/{firstLetter}").HandlerFunc(handler.ArtistStartingWith)
+	getR.Use(common.GetOffsetMaxMiddleware(logger))
+	getR.Path("/artists/{firstLetter}").HandlerFunc(handler.ArtistStartingWith)
+	getR.Path("/artist/{artist}").HandlerFunc(handler.SongsFromArtist)
 	return router
 }
 

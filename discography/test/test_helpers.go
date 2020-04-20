@@ -26,6 +26,7 @@ func (fake testWriter) Write(p []byte) (n int, err error) {
 type testDB struct {
 	artistsDB map[string]database.RowArtistDB
 	songsDB   map[string]map[string]database.SongDB
+	lastID    int
 }
 
 func newTestDB() testDB {
@@ -51,17 +52,20 @@ func (fake testDB) GetArtistsStartingWith(startLetter string, offset, max int) (
 }
 
 func (fake testDB) GetSongsFromArtist(artist string, offset, max int) ([]database.RowSongDB, error) {
-	discography := fake.songsDB[artist]
-	name_songs := make([]string, 0, len(discography))
-	for song := range discography {
-		name_songs = append(name_songs, song)
+	if max <= 0 || offset < 0 {
+		return nil, common.GetDBError("Can not search with negative offset or non-positive max", common.InvalidOffsetMax)
 	}
-	sort.Strings(name_songs)
+	discography := fake.songsDB[artist]
+	songNames := make([]string, 0, len(discography))
+	for song := range discography {
+		songNames = append(songNames, song)
+	}
+	sort.Strings(songNames)
 	searchResults := make([]database.RowSongDB, 0, max)
-	for indexResult := offset; indexResult < int(math.Min(float64(offset+max), float64(len(name_songs)))); indexResult++ {
-		song := discography[name_songs[indexResult]]
+	for indexResult := offset; indexResult < int(math.Min(float64(offset+max), float64(len(songNames)))); indexResult++ {
+		song := discography[songNames[indexResult]]
 		for _, artist := range song.Artists {
-			searchResults = append(searchResults, database.RowSongDB{ArtistName: artist.Artist, ArtistPrefix: artist.Prefix, SongName: song.Song})
+			searchResults = append(searchResults, database.RowSongDB{ArtistID: artist.ID, ArtistName: artist.Artist, ArtistPrefix: artist.Prefix, SongID: song.ID, SongName: song.Song})
 		}
 	}
 	return searchResults, nil
@@ -89,7 +93,7 @@ func (fake testDB) AddArtist(artist, prefix, linkSpotify string) (database.RowAr
 	if _, ok := fake.artistsDB[artist]; ok {
 		return database.RowArtistDB{}, common.GetDBError("Duplicate artist", common.DuplicateEntry)
 	}
-	newArtist := database.RowArtistDB{Artist: artist, Prefix: prefix, LinkSpotify: linkSpotify}
+	newArtist := database.RowArtistDB{ID: len(fake.artistsDB), Artist: artist, Prefix: prefix, LinkSpotify: linkSpotify}
 	fake.artistsDB[artist] = newArtist
 	fake.songsDB[artist] = make(map[string]database.SongDB)
 	return newArtist, nil
@@ -104,9 +108,19 @@ func (fake testDB) AddSong(song string, artists []database.RowArtistDB) (databas
 			return database.SongDB{}, common.GetDBError("Artist doesn't exist", common.UnknownError)
 		}
 	}
-	newSong := database.SongDB{Song: song, Artists: artists}
+	songID := artists[0].ID*10 + len(fake.songsDB[artists[0].Artist])
+	newSong := database.SongDB{ID: songID, Song: song, Artists: artists}
 	for _, artist := range artists {
 		fake.songsDB[artist.Artist][song] = newSong
 	}
 	return newSong, nil
+}
+
+type song struct {
+	artists  []string
+	nameSong string
+}
+
+func getNewSong(nameSong string, artists ...string) song {
+	return song{artists: artists, nameSong: nameSong}
 }

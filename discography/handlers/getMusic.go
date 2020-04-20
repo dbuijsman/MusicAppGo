@@ -15,13 +15,8 @@ func (handler *MusicHandler) ArtistStartingWith(response http.ResponseWriter, re
 		handler.Logger.Printf("[Error] Trying to request non-implemented case %v\n", firstLetter)
 		http.Error(response, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
 	}
-	offset, max, err := common.GetOffsetMaxFromRequest(request)
-	if err != nil {
-		badRequests.Inc()
-		handler.Logger.Printf("%s\n", err)
-		http.Error(response, "Invalid query value.", http.StatusBadRequest)
-		return
-	}
+	offsetMax := request.Context().Value(common.OffsetMax{}).(common.OffsetMax)
+	offset, max := offsetMax.Offset, offsetMax.Max
 	results, errorSearch := handler.db.GetArtistsStartingWith(firstLetter, offset, max+1)
 	if errorSearch != nil {
 		errorcode := errorSearch.(common.DBError).ErrorCode
@@ -49,7 +44,7 @@ func (handler *MusicHandler) ArtistStartingWith(response http.ResponseWriter, re
 	}
 	response.Header().Set("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)
-	err = common.ToJSON(&MultipleArtists{Music: results, HasNext: hasNext}, response)
+	err := common.ToJSON(&MultipleArtists{Music: results, HasNext: hasNext}, response)
 	if err != nil {
 		handler.Logger.Printf("[ERROR] %s\n", err)
 	}
@@ -58,13 +53,8 @@ func (handler *MusicHandler) ArtistStartingWith(response http.ResponseWriter, re
 // SongsFromArtist returns a set of songs from the requested artist
 func (handler *MusicHandler) SongsFromArtist(response http.ResponseWriter, request *http.Request) {
 	nameArtist := mux.Vars(request)["artist"]
-	offset, max, err := common.GetOffsetMaxFromRequest(request)
-	if err != nil {
-		badRequests.Inc()
-		handler.Logger.Printf("%s\n", err)
-		http.Error(response, "Invalid query value.", http.StatusBadRequest)
-		return
-	}
+	offsetMax := request.Context().Value(common.OffsetMax{}).(common.OffsetMax)
+	offset, max := offsetMax.Offset, offsetMax.Max
 	results, errorSearch := handler.db.GetSongsFromArtist(nameArtist, offset, max+1)
 	if errorSearch != nil {
 		errorcode := errorSearch.(common.DBError).ErrorCode
@@ -96,7 +86,6 @@ func (handler *MusicHandler) SongsFromArtist(response http.ResponseWriter, reque
 		song.Artists = append(song.Artists, database.NewRowArtistDB(rowArtist.ArtistID, rowArtist.ArtistName, rowArtist.ArtistPrefix))
 	}
 	multipleSongs = append(multipleSongs, song)
-
 	handler.Logger.Printf("Succesfully found songs from %v\n", nameArtist)
 	hasNext := (len(multipleSongs) > max)
 	if hasNext {
@@ -104,7 +93,7 @@ func (handler *MusicHandler) SongsFromArtist(response http.ResponseWriter, reque
 	}
 	response.Header().Set("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)
-	err = common.ToJSON(&MultipleSongs{Music: multipleSongs, HasNext: hasNext}, response)
+	err := common.ToJSON(&MultipleSongs{Music: multipleSongs, HasNext: hasNext}, response)
 	if err != nil {
 		handler.Logger.Printf("[ERROR] %s\n", err)
 	}

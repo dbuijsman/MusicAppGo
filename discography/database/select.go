@@ -29,6 +29,9 @@ func (db *MusicDB) GetArtistsStartingWith(startLetter string, offset, max int) (
 
 //GetSongsFromArtist finds songs of the given artist ordered by name of the song. The results are not yet combined (i.e. if multiple artists contributed on one song).
 func (db *MusicDB) GetSongsFromArtist(artist string, offset, max int) ([]RowSongDB, error) {
+	if max <= 0 || offset < 0 {
+		return nil, common.GetDBError("Can not search with negative offset or non-positive max", common.InvalidOffsetMax)
+	}
 	// This query is a cross join between artists, discography and a subquery that selects the songs of an artist
 	results, err := db.database.Query("SELECT artists.id, name_artist, prefix, songsOfArtist.song_id, name_song FROM artists, discography CROSS JOIN (SELECT song_id, name_song FROM artists, discography, songs WHERE name_artist=? AND songs.id=song_id AND artists.id=artist_id ORDER BY name_song LIMIT ?,?) AS songsOfArtist ON discography.song_id=songsOfArtist.song_id WHERE artists.id=artist_id AND songsOfArtist.song_id=discography.song_id ORDER BY name_song;", artist, offset, max)
 	if err != nil {
