@@ -10,13 +10,18 @@ import (
 
 // MusicHandler consists of a logger and a database
 type MusicHandler struct {
-	Logger *log.Logger
-	db     database.Database
+	Logger      *log.Logger
+	db          database.Database
+	SendMessage func(string, []byte)
 }
 
 //NewMusicHandler returns a MusicHandler
-func NewMusicHandler(l *log.Logger, db database.Database) *MusicHandler {
-	return &MusicHandler{Logger: l, db: db}
+func NewMusicHandler(l *log.Logger, db database.Database, sendMessage func(string, []byte) error) *MusicHandler {
+	return &MusicHandler{Logger: l, db: db, SendMessage: func(topic string, message []byte) {
+		if err := sendMessage(topic, message); err != nil {
+			l.Printf("Topic %v: Can't send message %v: %v\n", topic, message, err)
+		}
+	}}
 }
 
 var (

@@ -13,6 +13,8 @@ import (
 	"discography/handlers"
 
 	"github.com/gorilla/mux"
+	"github.com/optiopay/kafka/v2"
+	"github.com/optiopay/kafka/v2/proto"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -24,6 +26,8 @@ import (
 
 const port string = ":9002"
 const servername string = "discography"
+
+var kafkaAddrs = []string{"localhost:9092", "localhost:9093"}
 
 func main() {
 	logger := log.New(os.Stdout, servername, log.LstdFlags|log.Lshortfile)
@@ -38,10 +42,18 @@ func main() {
 		return
 	}
 	defer db.Close()
+	producer, closeBroker := connectToKafka()
+	defer closeBroker()
+	sendMessage := func(topic string, message []byte) error {
+		msg := &proto.Message{Value: []byte(message)}
+		_, err := producer.Produce(topic, 0, msg)
+		return err
+	}
+	handler := handlers.NewMusicHandler(logger, database.NewMusicDB(db), sendMessage)
 	// Create the Server
 	server := &http.Server{
 		Addr:     port,
-		Handler:  initRoutes(logger, db),
+		Handler:  initRoutes(handler),
 		ErrorLog: logger,
 	}
 
@@ -67,16 +79,29 @@ func main() {
 }
 
 // initRoutes returns a router which can handle all the requests for this microservice
-func initRoutes(logger *log.Logger, db *sql.DB) *mux.Router {
+func initRoutes(handler *handlers.MusicHandler) *mux.Router {
 	router := mux.NewRouter()
 	router.Handle("/metrics", promhttp.Handler())
 
-	handler := handlers.NewMusicHandler(logger, database.NewMusicDB(db))
 	getR := router.Methods(http.MethodGet).Subrouter()
-	getR.Use(common.GetOffsetMaxMiddleware(logger))
+	getR.Use(common.GetOffsetMaxMiddleware(handler.Logger))
 	getR.Path("/artists/{firstLetter}").HandlerFunc(handler.ArtistStartingWith)
 	getR.Path("/artist/{artist}").HandlerFunc(handler.SongsFromArtist)
 	return router
+}
+
+func connectToKafka() (producer kafka.Producer, closeBroker func()) {
+	conf := kafka.NewBrokerConf(servername)
+	conf.AllowTopicCreation = true
+
+	// connect to kafka cluster
+	broker, err := kafka.Dial(kafkaAddrs, conf)
+	if err != nil {
+		log.Fatalf("cannot connect to kafka cluster: %s", err)
+	}
+	producer = broker.Producer(kafka.NewProducerConf())
+	closeBroker = broker.Close
+	return
 }
 
 var (

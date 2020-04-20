@@ -11,8 +11,9 @@ import (
 
 func testMusicHandler() *handlers.MusicHandler {
 	l := log.New(testWriter{}, "TEST", log.LstdFlags|log.Lshortfile)
-	handler := handlers.NewMusicHandler(l, newTestDB())
-	return handler
+	return handlers.NewMusicHandler(l, newTestDB(), func(topic string, message []byte) error {
+		return nil
+	})
 }
 
 type testWriter struct{}
