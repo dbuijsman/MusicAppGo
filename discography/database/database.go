@@ -26,10 +26,10 @@ func NewMusicDB(db *sql.DB) *MusicDB {
 
 // RowArtistDB represents an artist from the database.
 type RowArtistDB struct {
-	ID          int    `json: "id"`
-	Artist      string `json: "artist"`
-	Prefix      string `json: "prefix"`
-	LinkSpotify string `json: "-"`
+	ID          int    `json:"id"`
+	Artist      string `json:"artist"`
+	Prefix      string `json:"prefix"`
+	LinkSpotify string `json:"-"`
 }
 
 // NewRowArtistDB returns a RowArtistDB containing the given data
@@ -39,9 +39,9 @@ func NewRowArtistDB(id int, artist, prefix string) RowArtistDB {
 
 // SongDB represents a song from the database with the contributing artists
 type SongDB struct {
-	ID      int           `json: "id"`
-	Artists []RowArtistDB `json: "artists"`
-	Song    string        `json: "song"`
+	ID      int           `json:"id"`
+	Artists []RowArtistDB `json:"artists"`
+	Song    string        `json:"song"`
 }
 
 // NewSongDB returns a SongDB containing the given data

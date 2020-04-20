@@ -32,10 +32,10 @@ func NewUserDB(db *sql.DB) *UserDB {
 
 // RowUserDB represents a row of user credentials in the database.
 type RowUserDB struct {
-	Username string `json: "username"`
-	password string `json: "-"`
-	salt     []byte `json: "-"`
-	Role     string `json: "role"`
+	Username string `json:"username"`
+	password string
+	salt     []byte
+	Role     string `json:"role"`
 }
 
 // NewRowUserDB returns a row with the given username and password
