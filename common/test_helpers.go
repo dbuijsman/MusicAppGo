@@ -3,8 +3,10 @@ package common
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -27,19 +29,37 @@ func TestPostRequest(t *testing.T, handler func(http.ResponseWriter, *http.Reque
 }
 
 // TestGetRequestWithPathVariable sends a get request with a path variable to the given handler
-func TestGetRequestWithPathVariable(t *testing.T, handler func(http.ResponseWriter, *http.Request), pathVariable, pathValue, query string) *httptest.ResponseRecorder {
+func TestGetRequestWithPathVariable(t *testing.T, handler func(http.ResponseWriter, *http.Request), pathVariable, pathValue, query string, middleware ...func(*log.Logger) func(http.Handler) http.Handler) *httptest.ResponseRecorder {
 	path := fmt.Sprintf("/{%v}", pathVariable)
 	router := mux.NewRouter()
-	getR := router.Methods(http.MethodGet).Subrouter()
-	getR.Path(path).HandlerFunc(handler)
+	emptyLogger := TestEmptyLogger()
+	for _, middlewareFunction := range middleware {
+		router.Use(middlewareFunction(emptyLogger))
+	}
+	router.Path(path).HandlerFunc(handler)
 	var url string
 	if query != "" {
 		url = fmt.Sprintf("/%v?%v", pathValue, query)
 	} else {
 		url = fmt.Sprintf("/%v", pathValue)
 	}
+	url = strings.ReplaceAll(url, " ", "%20")
 	request := httptest.NewRequest("GET", url, nil)
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)
 	return recorder
+}
+
+// TestWriter is an empty struct that can be used as an empty io.writer
+type TestWriter struct{}
+
+func (fake TestWriter) Write(p []byte) (n int, err error) {
+	n = len(p)
+	err = nil
+	return
+}
+
+// TestEmptyLogger return an empty logger
+func TestEmptyLogger() *log.Logger {
+	return log.New(TestWriter{}, "TEST", log.LstdFlags|log.Lshortfile)
 }
