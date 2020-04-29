@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"os"
 
-	"database/sql"
-
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -20,20 +18,15 @@ const servername string = "likes"
 
 func main() {
 	logger := log.New(os.Stdout, servername, log.LstdFlags|log.Lshortfile)
-	// Opening the database
-	db, err := sql.Open("mysql", "likesMusicApp:likelikes@tcp(127.0.0.1:3306)/pref_likes")
+	db, err := general.ConnectToMYSQL(logger, servername, "likesMusicApp:likelikes@tcp(127.0.0.1:3306)/pref_likes")
 	if err != nil {
-		logger.Fatalf("[ERROR] Failed to open connection to %v database: %v\n", servername, err.Error())
-		return
-	}
-	if err = db.Ping(); err != nil {
-		logger.Fatalf("[ERROR] Failed to open connection to %v database: %v\n", servername, err.Error())
+		logger.Printf("Stop starting server")
 		return
 	}
 	defer db.Close()
 	broker, closeBroker := general.ConnectToKafka(logger, servername)
 	defer closeBroker()
-	GETRequest, err := handlers.DefealtGETRequest(servername)
+	GETRequest, err := general.DefealtGETRequest(servername)
 	if err != nil {
 		logger.Fatalf("Can't create a client for sending get requests: %s\n", err)
 	}
@@ -59,5 +52,8 @@ func initRoutes(handler *handlers.LikesHandler) *mux.Router {
 	dislikesR.Methods(http.MethodPost).HandlerFunc(handler.AddDislike)
 	dislikesR.Methods(http.MethodDelete).HandlerFunc(handler.RemoveDislike)
 
+	internalR := router.PathPrefix("/intern").Methods(http.MethodGet).Subrouter()
+	internalR.Use(general.GetInternalRequestMiddleware(handler.Logger))
+	internalR.Path("/preference/{user}/{artist}").HandlerFunc(handler.GetPreferencesOfArtist)
 	return router
 }

@@ -12,8 +12,6 @@ import (
 	"github.com/optiopay/kafka/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"database/sql"
-
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -23,13 +21,9 @@ const servername string = "users"
 
 func main() {
 	logger := log.New(os.Stdout, servername, log.LstdFlags|log.Lshortfile)
-	db, err := sql.Open("mysql", "credentialsMusicApp:validate@tcp(127.0.0.1:3306)/userdata")
+	db, err := general.ConnectToMYSQL(logger, servername, "credentialsMusicApp:validate@tcp(127.0.0.1:3306)/userdata")
 	if err != nil {
-		logger.Fatalf("[ERROR] Failed to open connection to %v database: %v\n", servername, err.Error())
-		return
-	}
-	if err = db.Ping(); err != nil {
-		logger.Fatalf("[ERROR] Failed to open connection to %v database: %v\n", servername, err.Error())
+		logger.Printf("Stop starting server")
 		return
 	}
 	defer db.Close()

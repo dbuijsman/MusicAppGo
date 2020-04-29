@@ -13,8 +13,6 @@ import (
 	"github.com/optiopay/kafka/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"database/sql"
-
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -23,14 +21,9 @@ const servername string = "discography"
 
 func main() {
 	logger := log.New(os.Stdout, servername, log.LstdFlags|log.Lshortfile)
-	// Opening the database
-	db, err := sql.Open("mysql", "adminMusicApp:admin@tcp(127.0.0.1:3306)/discography")
+	db, err := general.ConnectToMYSQL(logger, servername, "adminMusicApp:admin@tcp(127.0.0.1:3306)/discography")
 	if err != nil {
-		logger.Fatalf("[ERROR] Failed to open connection to %v database: %v\n", servername, err.Error())
-		return
-	}
-	if err = db.Ping(); err != nil {
-		logger.Fatalf("[ERROR] Failed to open connection to %v database: %v\n", servername, err.Error())
+		logger.Printf("Stop starting server")
 		return
 	}
 	defer db.Close()
@@ -40,7 +33,12 @@ func main() {
 		logger.Fatalf("[ERROR] Failed to create topics due to: %s\n", topicErr)
 	}
 	producer := broker.Producer(kafka.NewProducerConf())
-	music := handlers.NewMusicHandler(logger, database.NewMusicDB(db), general.GetSendMessage(producer))
+	getRequest, err := general.DefealtGETRequest(servername)
+	if err != nil {
+		logger.Fatalf("Can't create a client for sending get requests: %s\n", err)
+	}
+	logger.Printf("Handler is ready for sending get requests")
+	music := handlers.NewMusicHandler(logger, database.NewMusicDB(db), general.GetSendMessage(producer), getRequest)
 	general.StartServer(servername, port, initRoutes(music), logger)
 }
 

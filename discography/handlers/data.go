@@ -3,6 +3,7 @@ package handlers
 import (
 	"discography/database"
 	"log"
+	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -13,11 +14,12 @@ type MusicHandler struct {
 	Logger      *log.Logger
 	db          database.Database
 	SendMessage func(string, []byte)
+	GETRequest  func(string) (*http.Response, error)
 }
 
 //NewMusicHandler returns a MusicHandler
-func NewMusicHandler(l *log.Logger, db database.Database, sendMessage func(string, []byte) error) *MusicHandler {
-	return &MusicHandler{Logger: l, db: db, SendMessage: func(topic string, message []byte) {
+func NewMusicHandler(l *log.Logger, db database.Database, sendMessage func(string, []byte) error, get func(string) (*http.Response, error)) *MusicHandler {
+	return &MusicHandler{Logger: l, db: db, GETRequest: get, SendMessage: func(topic string, message []byte) {
 		if err := sendMessage(topic, message); err != nil {
 			l.Printf("Topic %v: Can't send message %s: %v\n", topic, message, err)
 			return

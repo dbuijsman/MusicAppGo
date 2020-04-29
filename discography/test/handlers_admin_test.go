@@ -19,7 +19,7 @@ func TestAddArtist_savingInDB(t *testing.T) {
 	}
 	for nameCase, newArtist := range cases {
 		db := newTestDB()
-		handler := handlers.NewMusicHandler(general.TestEmptyLogger(), db, general.TestSendMessageEmpty())
+		handler := handlers.NewMusicHandler(general.TestEmptyLogger(), db, general.TestSendMessageEmpty(), nil)
 		general.TestPostRequest(t, handler.AddArtist, handlers.NewClientArtist(newArtist.nameArtist, ""))
 		result := db.artistsDB[newArtist.expectedName]
 		if result.name != newArtist.expectedName {
@@ -128,7 +128,7 @@ func TestAddSong_savingInDB(t *testing.T) {
 	}
 	for nameCase, newSong := range cases {
 		db := newTestDB()
-		handler := handlers.NewMusicHandler(general.TestEmptyLogger(), db, general.TestSendMessageEmpty())
+		handler := handlers.NewMusicHandler(general.TestEmptyLogger(), db, general.TestSendMessageEmpty(), nil)
 		for _, artist := range newSong.existingArtists {
 			general.TestPostRequest(t, handler.AddArtist, handlers.NewClientArtist(artist, ""))
 		}

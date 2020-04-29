@@ -10,7 +10,7 @@ import (
 
 func testMusicHandler() *handlers.MusicHandler {
 	l := general.TestEmptyLogger()
-	return handlers.NewMusicHandler(l, newTestDB(), general.TestSendMessageEmpty())
+	return handlers.NewMusicHandler(l, newTestDB(), general.TestSendMessageEmpty(), nil)
 }
 
 type testDB struct {

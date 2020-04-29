@@ -2,6 +2,7 @@ package general
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"net/http"
 	"os"
@@ -14,6 +15,21 @@ import (
 )
 
 var kafkaAddrs = []string{"localhost:9092", "localhost:9093"}
+
+// ConnectToMYSQL connects
+func ConnectToMYSQL(logger *log.Logger, servername, dataSourceName string) (*sql.DB, error) {
+	// Opening the database
+	db, err := sql.Open("mysql", dataSourceName)
+	if err != nil {
+		logger.Fatalf("[ERROR] Failed to open connection to %v database: %v\n", servername, err.Error())
+		return nil, err
+	}
+	if err = db.Ping(); err != nil {
+		logger.Fatalf("[ERROR] Failed to open connection to %v database: %v\n", servername, err.Error())
+		return nil, err
+	}
+	return db, nil
+}
 
 // StartServer starts up a server with the given configuration. The server will gracefully shut down after entering crtl+C
 func StartServer(servername, port string, router *mux.Router, logger *log.Logger) {
@@ -81,6 +97,31 @@ func GetSendMessage(producer kafka.Producer) func(topic string, message []byte) 
 		_, err := producer.Produce(topic, 0, msg)
 		return err
 	}
+}
+
+// DefealtGETRequest can be used as value for LikesHandler.GETRequest
+func DefealtGETRequest(servername string) (func(string) (*http.Response, error), error) {
+	tokenString, errToken := CreateTokenInternalRequests(servername)
+	token := &tokenString
+	client := http.Client{}
+	if errToken != nil {
+		return nil, errToken
+	}
+	return func(url string) (*http.Response, error) {
+		request, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return nil, err
+		}
+		request.Header.Add("Token", *token)
+		resp, respError := client.Do(request)
+		if resp.StatusCode == http.StatusUnauthorized {
+			*token, errToken = CreateTokenInternalRequests(servername)
+			request, err = http.NewRequest("GET", url, nil)
+			request.Header.Add("Token", *token)
+			return client.Do(request)
+		}
+		return resp, respError
+	}, nil
 }
 
 // StartConsumer consumes messages from the given topic and calls the given function
