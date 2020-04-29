@@ -116,6 +116,40 @@ func TestGetRequestWithPath(t *testing.T, handler func(http.ResponseWriter, *htt
 	return recorder
 }
 
+// TestSendRequest sends the request to the given handler
+func TestSendRequest(t *testing.T, handler func(http.ResponseWriter, *http.Request), request *http.Request) *httptest.ResponseRecorder {
+	recorder := httptest.NewRecorder()
+	handler(recorder, request)
+	return recorder
+}
+
+// TestSendRequestWithPath sends a get request with a path variable to the given handler
+func TestSendRequestWithPath(t *testing.T, handler func(http.ResponseWriter, *http.Request), pathVariable, pathValue string, request *http.Request) *httptest.ResponseRecorder {
+	if pathVariable == "" {
+		t.Fatalf("Can't send get request due to empty pathVariable\n")
+	}
+	path := fmt.Sprintf("/{%v}", pathVariable)
+	router := mux.NewRouter()
+	router.Path(path).HandlerFunc(handler)
+	url := strings.ReplaceAll(fmt.Sprintf("/%v", pathValue), " ", "%20")
+	request.URL.Path = url
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	return recorder
+}
+
+// WithCredentials add the credentials to the request
+func WithCredentials(request *http.Request, creds Credentials) *http.Request {
+	ctx := context.WithValue(request.Context(), Credentials{}, creds)
+	return request.WithContext(ctx)
+}
+
+// WithOffsetMax add the offset and max value to the request
+func WithOffsetMax(request *http.Request, offset, max int) *http.Request {
+	ctx := context.WithValue(request.Context(), OffsetMax{}, OffsetMax{Offset: offset, Max: max})
+	return request.WithContext(ctx)
+}
+
 // TestWriter is an empty struct that can be used as an empty io.writer
 type TestWriter struct{}
 
