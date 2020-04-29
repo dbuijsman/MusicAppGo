@@ -22,13 +22,13 @@ jobs:
 
     - name: Get dependencies
       run: |
-            cd common && go get -v -t -d ./... && cd ..
+            cd general && go get -v -t -d ./... && cd ..
             cd users && go get -v -t -d ./... && cd ..
             cd discography && go get -v -t -d ./... && cd ..
 
     - name: Build
       run: |
-           cd common && go build . && cd ..
+           cd general && go build . && cd ..
            cd users && go build . && cd ..
            cd discography && go build && cd ..
     - name: Test

@@ -1,9 +1,9 @@
 package test
 
 import (
-	"MusicAppGo/common"
 	"discography/handlers"
 	"fmt"
+	"general"
 	"net/http"
 	"testing"
 )
@@ -16,16 +16,17 @@ func TestArtistStartingWith_statusCode(t *testing.T) {
 		expectedStatusCode int
 	}{
 		"Artist is found":                         {[]string{"Dio", "Disturbed"}, "D", 0, http.StatusOK},
+		"Artist starts with a number":             {[]string{"30 Seconds To Mars", "50 Cent"}, "0-9", 0, http.StatusOK},
 		"No artist is found":                      {[]string{"Dio", "Disturbed"}, "Q", 0, http.StatusNotFound},
 		"Offset is bigger than amount of results": {[]string{"Dio", "Disturbed"}, "D", 2, http.StatusNotFound},
 	}
 	for nameCase, testCase := range cases {
 		handler := testMusicHandler()
 		for _, nameArtist := range testCase.artists {
-			common.TestPostRequest(t, handler.AddArtist, handlers.NewArtist{Name: nameArtist})
+			general.TestPostRequest(t, handler.AddArtist, handlers.NewClientArtist(nameArtist, ""))
 		}
 		query := fmt.Sprintf("offset=%v", testCase.offset)
-		response := common.TestGetRequestWithPathVariable(t, handler.ArtistStartingWith, "firstLetter", testCase.firstLetter, query, common.GetOffsetMaxMiddleware)
+		response := general.TestGetRequestWithPath(t, handler.ArtistStartingWith, "firstLetter", testCase.firstLetter, query, general.GetOffsetMaxMiddleware)
 		if response.Code != testCase.expectedStatusCode {
 			t.Errorf("%v: Expects statuscode %v but got %v\n", nameCase, testCase.expectedStatusCode, response.Code)
 		}
@@ -38,30 +39,34 @@ func TestArtistStartingWith_amountResults(t *testing.T) {
 		offset, max           int
 		expectedAmountResults int
 	}{
-		"Artist without prefix with right first letter":         {[]string{"Bob Dylan"}, "B", 0, 10, 1},
-		"Artist with prefix with right first letter":            {[]string{"The Beatles"}, "B", 0, 10, 1},
-		"Prefix does not count as a first letter":               {[]string{"The Beatles", "Tenacious D"}, "T", 0, 10, 1},
-		"Only the first letter counts":                          {[]string{"Bob Dylan", "D12"}, "D", 0, 10, 1},
-		"Multiple artists with right first letter":              {[]string{"The Beatles", "The Bee Gees", "Bob Dylan"}, "B", 0, 10, 3},
-		"Amount of results capped by max":                       {[]string{"The Beatles", "The Bee Gees", "Bob Dylan"}, "B", 0, 2, 2},
-		"Skip amount of results given by offset":                {[]string{"The Beatles", "The Bee Gees", "Bob Dylan"}, "B", 2, 10, 1},
-		"Correctly handle combination of max and offset":        {[]string{"The Beatles", "The Bee Gees", "Bob Dylan", "Bon Jovi"}, "B", 1, 2, 2},
-		"Return only the artists with the correct first letter": {[]string{"Pendulum", "The Prodigy", "Bob Dylan"}, "P", 0, 10, 2},
+		"Artist without prefix with right first letter":  {[]string{"Bob Dylan"}, "B", 0, 10, 1},
+		"Artist with prefix with right first letter":     {[]string{"The Beatles"}, "B", 0, 10, 1},
+		"Prefix does not count as a first letter":        {[]string{"The Beatles", "Tenacious D"}, "T", 0, 10, 1},
+		"Only the first letter counts":                   {[]string{"Bob Dylan", "D12"}, "D", 0, 10, 1},
+		"Multiple artists with right first letter":       {[]string{"The Beatles", "The Bee Gees", "Bob Dylan"}, "B", 0, 10, 3},
+		"Amount of results capped by max":                {[]string{"The Beatles", "The Bee Gees", "Bob Dylan"}, "B", 0, 2, 2},
+		"Skip amount of results given by offset":         {[]string{"The Beatles", "The Bee Gees", "Bob Dylan"}, "B", 2, 10, 1},
+		"Correctly handle combination of max and offset": {[]string{"The Beatles", "The Bee Gees", "Bob Dylan", "Bon Jovi"}, "B", 1, 2, 2},
+		"Only artists with the correct first letter":     {[]string{"Pendulum", "The Prodigy", "Bob Dylan"}, "P", 0, 10, 2},
+		"Artist starting with a number":                  {[]string{"50 Cent"}, "0-9", 0, 10, 1},
+		"Multiple artist starting with a number":         {[]string{"10CC", "50 Cent"}, "0-9", 0, 10, 2},
+		"Only artists starting with a number":            {[]string{"10CC", "50 Cent", "Avenged Sevenfold"}, "0-9", 0, 10, 2},
+		"Starting with number only looks at start":       {[]string{"10CC", "50 Cent", "Tech N9ne"}, "0-9", 0, 10, 2},
 	}
 	for nameCase, discography := range cases {
 		handler := testMusicHandler()
 		for _, newArtist := range discography.artists {
-			common.TestPostRequest(t, handler.AddArtist, handlers.NewArtist{Name: newArtist})
+			general.TestPostRequest(t, handler.AddArtist, handlers.NewClientArtist(newArtist, ""))
 		}
 		query := fmt.Sprintf("offset=%v&max=%v", discography.offset, discography.max)
-		response := common.TestGetRequestWithPathVariable(t, handler.ArtistStartingWith, "firstLetter", discography.firstLetter, query, common.GetOffsetMaxMiddleware)
-		var result handlers.MultipleArtists
-		err := common.FromJSON(&result, response.Body)
+		response := general.TestGetRequestWithPath(t, handler.ArtistStartingWith, "firstLetter", discography.firstLetter, query, general.GetOffsetMaxMiddleware)
+		var result general.MultipleArtists
+		err := general.ReadFromJSON(&result, response.Body)
 		if err != nil {
 			t.Fatalf("[ERROR] %v: Decoding response: %v\n", nameCase, err)
 		}
-		if len(result.Music) != discography.expectedAmountResults {
-			t.Errorf("%v: Searching for artists starting with %v, offset %v and max %v should give %v results but got %v\n", nameCase, discography.firstLetter, discography.offset, discography.max, discography.expectedAmountResults, len(result.Music))
+		if len(result.Data) != discography.expectedAmountResults {
+			t.Errorf("%v: Searching for artists starting with %v, offset %v and max %v should give %v results but got %v\n", nameCase, discography.firstLetter, discography.offset, discography.max, discography.expectedAmountResults, len(result.Data))
 		}
 	}
 }
@@ -83,16 +88,16 @@ func TestArtistStartingWith_correctOrderResults(t *testing.T) {
 	for nameCase, discography := range cases {
 		handler := testMusicHandler()
 		for _, newArtist := range discography.artists {
-			common.TestPostRequest(t, handler.AddArtist, handlers.NewArtist{Name: newArtist})
+			general.TestPostRequest(t, handler.AddArtist, handlers.NewClientArtist(newArtist, ""))
 		}
 		query := fmt.Sprintf("offset=%v&max=%v", discography.offset, discography.max)
-		response := common.TestGetRequestWithPathVariable(t, handler.ArtistStartingWith, "firstLetter", discography.firstLetter, query, common.GetOffsetMaxMiddleware)
-		var result handlers.MultipleArtists
-		err := common.FromJSON(&result, response.Body)
+		response := general.TestGetRequestWithPath(t, handler.ArtistStartingWith, "firstLetter", discography.firstLetter, query, general.GetOffsetMaxMiddleware)
+		var result general.MultipleArtists
+		err := general.ReadFromJSON(&result, response.Body)
 		if err != nil {
 			t.Fatalf("[ERROR] %v: Decoding response: %v\n", nameCase, err)
 		}
-		if artist := result.Music[discography.indexExpectedName].Artist; artist != discography.expectedName {
+		if artist := result.Data[discography.indexExpectedName].Name; artist != discography.expectedName {
 			t.Errorf("%v: Searching for artists with given first letter expects %v at index %v but got %v\n", nameCase, discography.expectedName, discography.indexExpectedName, artist)
 		}
 	}
@@ -112,12 +117,12 @@ func TestArtistStartingWith_HasNextResult(t *testing.T) {
 	for nameCase, discography := range cases {
 		handler := testMusicHandler()
 		for _, newArtist := range discography.artists {
-			common.TestPostRequest(t, handler.AddArtist, handlers.NewArtist{Name: newArtist})
+			general.TestPostRequest(t, handler.AddArtist, handlers.NewClientArtist(newArtist, ""))
 		}
 		query := fmt.Sprintf("offset=%v&max=%v", discography.offset, discography.max)
-		response := common.TestGetRequestWithPathVariable(t, handler.ArtistStartingWith, "firstLetter", discography.firstLetter, query, common.GetOffsetMaxMiddleware)
-		var result handlers.MultipleArtists
-		err := common.FromJSON(&result, response.Body)
+		response := general.TestGetRequestWithPath(t, handler.ArtistStartingWith, "firstLetter", discography.firstLetter, query, general.GetOffsetMaxMiddleware)
+		var result general.MultipleArtists
+		err := general.ReadFromJSON(&result, response.Body)
 		if err != nil {
 			t.Fatalf("[ERROR] %v: Decoding response: %v\n", nameCase, err)
 		}
@@ -142,7 +147,7 @@ func TestSongsFromArtist_statusCode(t *testing.T) {
 		handler := testMusicHandler()
 		handler.AddSong(testCase.existingSong.nameSong, testCase.existingSong.artists...)
 		query := fmt.Sprintf("offset=%v", testCase.offset)
-		response := common.TestGetRequestWithPathVariable(t, handler.SongsFromArtist, "artist", testCase.artist, query, common.GetOffsetMaxMiddleware)
+		response := general.TestGetRequestWithPath(t, handler.SongsFromArtist, "artist", testCase.artist, query, general.GetOffsetMaxMiddleware)
 		if response.Code != testCase.expectedStatusCode {
 			t.Errorf("%v: Expects statuscode: %v but got: %v\n", nameCase, testCase.expectedStatusCode, response.Code)
 		}
@@ -167,15 +172,15 @@ func TestSongsFromArtist_amountResults(t *testing.T) {
 			handler.AddSong(song.nameSong, song.artists...)
 		}
 		query := fmt.Sprintf("offset=%v&max=%v", testCase.offset, testCase.max)
-		response := common.TestGetRequestWithPathVariable(t, handler.SongsFromArtist, "artist", testCase.artist, query, common.GetOffsetMaxMiddleware)
-		var result handlers.MultipleSongs
-		err := common.FromJSON(&result, response.Body)
+		response := general.TestGetRequestWithPath(t, handler.SongsFromArtist, "artist", testCase.artist, query, general.GetOffsetMaxMiddleware)
+		var result general.MultipleSongs
+		err := general.ReadFromJSON(&result, response.Body)
 		if err != nil {
 			t.Fatalf("[ERROR] %v: Decoding response: %v\n", nameCase, err)
 		}
-		if len(result.Music) != testCase.expectedAmountResults {
-			fmt.Println(result.Music)
-			t.Errorf("%v: Searching for songs of %v, offset %v and max %v should give %v results but got %v\n", nameCase, testCase.artist, testCase.offset, testCase.max, testCase.expectedAmountResults, len(result.Music))
+		if len(result.Data) != testCase.expectedAmountResults {
+			fmt.Println(result.Data)
+			t.Errorf("%v: Searching for songs of %v, offset %v and max %v should give %v results but got %v\n", nameCase, testCase.artist, testCase.offset, testCase.max, testCase.expectedAmountResults, len(result.Data))
 		}
 	}
 }
@@ -200,13 +205,13 @@ func TestSongsFromArtist_correctOrderResults(t *testing.T) {
 			handler.AddSong(song.nameSong, song.artists...)
 		}
 		query := fmt.Sprintf("offset=%v&max=%v", testCase.offset, testCase.max)
-		response := common.TestGetRequestWithPathVariable(t, handler.SongsFromArtist, "artist", testCase.artist, query, common.GetOffsetMaxMiddleware)
-		var result handlers.MultipleSongs
-		err := common.FromJSON(&result, response.Body)
+		response := general.TestGetRequestWithPath(t, handler.SongsFromArtist, "artist", testCase.artist, query, general.GetOffsetMaxMiddleware)
+		var result general.MultipleSongs
+		err := general.ReadFromJSON(&result, response.Body)
 		if err != nil {
 			t.Fatalf("[ERROR] %v: Decoding response: %v\n", nameCase, err)
 		}
-		if song := result.Music[testCase.indexExpectedName].Song; song != testCase.expectedName {
+		if song := result.Data[testCase.indexExpectedName].Name; song != testCase.expectedName {
 			t.Errorf("%v: Searching for artists with given first letter expects %v at index %v but got %v\n", nameCase, testCase.expectedName, testCase.indexExpectedName, song)
 		}
 	}
@@ -229,9 +234,9 @@ func TestSongsFromArtist_HasNextResult(t *testing.T) {
 			handler.AddSong(song.nameSong, song.artists...)
 		}
 		query := fmt.Sprintf("offset=%v&max=%v", testCase.offset, testCase.max)
-		response := common.TestGetRequestWithPathVariable(t, handler.SongsFromArtist, "artist", testCase.artist, query, common.GetOffsetMaxMiddleware)
-		var result handlers.MultipleSongs
-		err := common.FromJSON(&result, response.Body)
+		response := general.TestGetRequestWithPath(t, handler.SongsFromArtist, "artist", testCase.artist, query, general.GetOffsetMaxMiddleware)
+		var result general.MultipleSongs
+		err := general.ReadFromJSON(&result, response.Body)
 		if err != nil {
 			t.Fatalf("[ERROR] %v: Decoding response: %v\n", nameCase, err)
 		}
@@ -254,19 +259,19 @@ func TestSongsFromArtist_collaborations(t *testing.T) {
 	for nameCase, testCase := range cases {
 		handler := testMusicHandler()
 		handler.AddSong(testCase.song.nameSong, testCase.song.artists...)
-		response := common.TestGetRequestWithPathVariable(t, handler.SongsFromArtist, "artist", testCase.artist, "", common.GetOffsetMaxMiddleware)
-		var result handlers.MultipleSongs
-		err := common.FromJSON(&result, response.Body)
+		response := general.TestGetRequestWithPath(t, handler.SongsFromArtist, "artist", testCase.artist, "", general.GetOffsetMaxMiddleware)
+		var result general.MultipleSongs
+		err := general.ReadFromJSON(&result, response.Body)
 		if err != nil {
 			t.Fatalf("[ERROR] %v: Decoding response: %v\n", nameCase, err)
 		}
-		foundArtists := result.Music[0].Artists
+		foundArtists := result.Data[0].Artists
 		if len(foundArtists) != testCase.expectedAmountOfArtists {
 			t.Errorf("%v: Expects %v collaborating artists but got: %v\n", nameCase, testCase.expectedAmountOfArtists, len(foundArtists))
 		}
 		foundExpectedArtist := false
 		for _, artist := range foundArtists {
-			if artist.Artist == testCase.expectedCollaboratingArtist {
+			if artist.Name == testCase.expectedCollaboratingArtist {
 				foundExpectedArtist = true
 				break
 			}

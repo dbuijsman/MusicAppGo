@@ -19,9 +19,22 @@ type MusicHandler struct {
 func NewMusicHandler(l *log.Logger, db database.Database, sendMessage func(string, []byte) error) *MusicHandler {
 	return &MusicHandler{Logger: l, db: db, SendMessage: func(topic string, message []byte) {
 		if err := sendMessage(topic, message); err != nil {
-			l.Printf("Topic %v: Can't send message %v: %v\n", topic, message, err)
+			l.Printf("Topic %v: Can't send message %s: %v\n", topic, message, err)
+			return
 		}
+		l.Printf("Topic %v: Send message: %s\n", topic, message)
 	}}
+}
+
+// ClientArtist is the form that is used in posting a new artist from the client side
+type ClientArtist struct {
+	Artist      string `json:"artist" validate:"required"`
+	LinkSpotify string `json:"linkSpotify"`
+}
+
+// NewClientArtist returns a ClientArtist containing the given data
+func NewClientArtist(artist, linkSpotify string) ClientArtist {
+	return ClientArtist{Artist: artist, LinkSpotify: linkSpotify}
 }
 
 var (
@@ -38,20 +51,29 @@ var (
 	})
 )
 
-// NewArtist will be the form of a new artist that will be added to the database
-type NewArtist struct {
-	Name        string `json:"name" validate:"required"`
-	LinkSpotify string `json:"-"`
-}
+var (
+	succesNewArtist = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "admin_new_artist_total",
+		Help: "The total number of succesfull requests to add a new artist to the database",
+	})
+)
 
-// MultipleArtists contains data of artists and a boolean to indicate if there are more results
-type MultipleArtists struct {
-	Music   []database.RowArtistDB `json: "music"`
-	HasNext bool                   `json: "hasNext"`
-}
+var (
+	failedNewArtist = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "admin_new_artist_denied_total",
+		Help: "The total number of failed requests to add a new artist to the database",
+	})
+)
+var (
+	succesNewSong = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "admin_new_song_total",
+		Help: "The total number of succesfull requests to add a new song to the database",
+	})
+)
 
-// MultipleSongs contains data of songs and a boolean to indicate if there are more results
-type MultipleSongs struct {
-	Music   []database.SongDB `json: "music"`
-	HasNext bool              `json: "hasNext"`
-}
+var (
+	failedNewSong = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "admin_new_song_denied_total",
+		Help: "The total number of failed requests to add a new song to the database",
+	})
+)

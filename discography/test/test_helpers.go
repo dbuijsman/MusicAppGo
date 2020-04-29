@@ -1,42 +1,36 @@
 package test
 
 import (
-	"MusicAppGo/common"
-	"discography/database"
 	"discography/handlers"
-	"log"
+	"general"
 	"math"
 	"sort"
+	"strconv"
 )
 
 func testMusicHandler() *handlers.MusicHandler {
-	l := log.New(testWriter{}, "TEST", log.LstdFlags|log.Lshortfile)
-	return handlers.NewMusicHandler(l, newTestDB(), func(topic string, message []byte) error {
-		return nil
-	})
-}
-
-type testWriter struct{}
-
-func (fake testWriter) Write(p []byte) (n int, err error) {
-	n = len(p)
-	err = nil
-	return
+	l := general.TestEmptyLogger()
+	return handlers.NewMusicHandler(l, newTestDB(), general.TestSendMessageEmpty())
 }
 
 type testDB struct {
-	artistsDB map[string]database.RowArtistDB
-	songsDB   map[string]map[string]database.SongDB
+	artistsDB map[string]testArtist
+	songsDB   map[string]map[string]general.Song
 	lastID    int
 }
 
 func newTestDB() testDB {
-	return testDB{artistsDB: make(map[string]database.RowArtistDB), songsDB: make(map[string]map[string]database.SongDB)}
+	return testDB{artistsDB: make(map[string]testArtist), songsDB: make(map[string]map[string]general.Song)}
 }
 
-func (fake testDB) GetArtistsStartingWith(startLetter string, offset, max int) ([]database.RowArtistDB, error) {
+type testArtist struct {
+	id                        int
+	name, prefix, linkSpotify string
+}
+
+func (fake testDB) GetArtistsStartingWithLetter(startLetter string, offset, max int) ([]general.Artist, error) {
 	if max <= 0 || offset < 0 {
-		return nil, common.GetDBError("Can not search with negative offset or non-positive max", common.InvalidOffsetMax)
+		return nil, general.GetDBError("Can not search with negative offset or non-positive max", general.InvalidOffsetMax)
 	}
 	allResults := make([]string, 0, max)
 	for artist := range fake.artistsDB {
@@ -45,16 +39,36 @@ func (fake testDB) GetArtistsStartingWith(startLetter string, offset, max int) (
 		}
 	}
 	sort.Strings(allResults)
-	searchResults := make([]database.RowArtistDB, 0, max)
+	searchResults := make([]general.Artist, 0, max)
 	for indexResult := offset; indexResult < int(math.Min(float64(offset+max), float64(len(allResults)))); indexResult++ {
-		searchResults = append(searchResults, fake.artistsDB[allResults[indexResult]])
+		foundArtist := fake.artistsDB[allResults[indexResult]]
+		searchResults = append(searchResults, general.NewArtist(foundArtist.id, foundArtist.name, foundArtist.prefix))
 	}
 	return searchResults, nil
 }
-
-func (fake testDB) GetSongsFromArtist(artist string, offset, max int) ([]database.RowSongDB, error) {
+func (fake testDB) GetArtistsStartingWithNumber(offset, max int) ([]general.Artist, error) {
 	if max <= 0 || offset < 0 {
-		return nil, common.GetDBError("Can not search with negative offset or non-positive max", common.InvalidOffsetMax)
+		return nil, general.GetDBError("Can not search with negative offset or non-positive max", general.InvalidOffsetMax)
+	}
+	allResults := make([]string, 0, max)
+	for artist := range fake.artistsDB {
+		if _, err := strconv.Atoi(artist[0:1]); err == nil {
+			allResults = append(allResults, artist)
+		}
+	}
+	sort.Strings(allResults)
+	searchResults := make([]general.Artist, 0, max)
+	for indexResult := offset; indexResult < int(math.Min(float64(offset+max), float64(len(allResults)))); indexResult++ {
+		foundArtist := fake.artistsDB[allResults[indexResult]]
+		searchResults = append(searchResults, general.NewArtist(foundArtist.id, foundArtist.name, foundArtist.prefix))
+	}
+	return searchResults, nil
+
+}
+
+func (fake testDB) GetSongsFromArtist(artist string, offset, max int) ([]general.Song, error) {
+	if max <= 0 || offset < 0 {
+		return nil, general.GetDBError("Can not search with negative offset or non-positive max", general.InvalidOffsetMax)
 	}
 	discography := fake.songsDB[artist]
 	songNames := make([]string, 0, len(discography))
@@ -62,57 +76,71 @@ func (fake testDB) GetSongsFromArtist(artist string, offset, max int) ([]databas
 		songNames = append(songNames, song)
 	}
 	sort.Strings(songNames)
-	searchResults := make([]database.RowSongDB, 0, max)
+	searchResults := make([]general.Song, 0, max)
 	for indexResult := offset; indexResult < int(math.Min(float64(offset+max), float64(len(songNames)))); indexResult++ {
-		song := discography[songNames[indexResult]]
-		for _, artist := range song.Artists {
-			searchResults = append(searchResults, database.RowSongDB{ArtistID: artist.ID, ArtistName: artist.Artist, ArtistPrefix: artist.Prefix, SongID: song.ID, SongName: song.Song})
-		}
+		searchResults = append(searchResults, discography[songNames[indexResult]])
+
 	}
 	return searchResults, nil
 }
 
-func (fake testDB) FindArtist(name string) (database.RowArtistDB, error) {
+func (fake testDB) FindArtistByName(name string) (general.Artist, error) {
 	artist, ok := fake.artistsDB[name]
 	if !ok {
-		return database.RowArtistDB{}, common.GetDBError("Not found", common.NotFoundError)
+		return general.Artist{}, general.GetDBError("Not found", general.NotFoundError)
 	}
-	return artist, nil
+	return general.NewArtist(artist.id, artist.name, artist.prefix), nil
 }
-func (fake testDB) FindSong(artist, song string) (database.SongDB, error) {
+
+func (fake testDB) FindSongByName(artist, song string) (general.Song, error) {
 	discography, ok := fake.songsDB[artist]
 	if !ok {
-		return database.SongDB{}, common.GetDBError("Not found", common.NotFoundError)
+		return general.Song{}, general.GetDBError("Not found", general.NotFoundError)
 	}
 	songData, okSong := discography[song]
 	if !okSong {
-		return database.SongDB{}, common.GetDBError("Not found", common.NotFoundError)
+		return general.Song{}, general.GetDBError("Not found", general.NotFoundError)
 	}
 	return songData, nil
 }
-func (fake testDB) AddArtist(artist, prefix, linkSpotify string) (database.RowArtistDB, error) {
-	if _, ok := fake.artistsDB[artist]; ok {
-		return database.RowArtistDB{}, common.GetDBError("Duplicate artist", common.DuplicateEntry)
-	}
-	newArtist := database.RowArtistDB{ID: len(fake.artistsDB), Artist: artist, Prefix: prefix, LinkSpotify: linkSpotify}
-	fake.artistsDB[artist] = newArtist
-	fake.songsDB[artist] = make(map[string]database.SongDB)
-	return newArtist, nil
-}
 
-func (fake testDB) AddSong(song string, artists []database.RowArtistDB) (database.SongDB, error) {
-	if len(artists) == 0 {
-		return database.SongDB{}, common.GetDBError("No artists is given for adding a song", common.IncompleteInput)
-	}
-	for _, artist := range artists {
-		if _, ok := fake.songsDB[artist.Artist]; !ok {
-			return database.SongDB{}, common.GetDBError("Artist doesn't exist", common.UnknownError)
+func (fake testDB) FindSongByID(songID int) (general.Song, error) {
+	for _, discography := range fake.songsDB {
+		for _, song := range discography {
+			if song.ID == songID {
+				return song, nil
+			}
 		}
 	}
-	songID := artists[0].ID*10 + len(fake.songsDB[artists[0].Artist])
-	newSong := database.SongDB{ID: songID, Song: song, Artists: artists}
+	return general.Song{}, general.GetDBError("Not found", general.NotFoundError)
+}
+
+func (fake testDB) AddArtist(artist, prefix, linkSpotify string) (general.Artist, error) {
+	if _, ok := fake.artistsDB[artist]; ok {
+		return general.Artist{}, general.GetDBError("Duplicate artist", general.DuplicateEntry)
+	}
+	newArtist := testArtist{id: len(fake.artistsDB), name: artist, prefix: prefix, linkSpotify: linkSpotify}
+	fake.artistsDB[artist] = newArtist
+	fake.songsDB[artist] = make(map[string]general.Song)
+	return general.NewArtist(newArtist.id, newArtist.name, newArtist.prefix), nil
+}
+
+func (fake testDB) AddSong(song string, artists []general.Artist) (general.Song, error) {
+	if len(artists) == 0 {
+		return general.Song{}, general.GetDBError("No artists is given for adding a song", general.InvalidInput)
+	}
 	for _, artist := range artists {
-		fake.songsDB[artist.Artist][song] = newSong
+		if _, ok := fake.songsDB[artist.Name]; !ok {
+			return general.Song{}, general.GetDBError("Artist doesn't exist", general.UnknownError)
+		}
+		if _, ok := fake.songsDB[artist.Name][song]; ok {
+			return general.Song{}, general.GetDBError("Duplicate entry", general.DuplicateEntry)
+		}
+	}
+	songID := artists[0].ID*10 + len(fake.songsDB[artists[0].Name])
+	newSong := general.Song{ID: songID, Name: song, Artists: artists}
+	for _, artist := range artists {
+		fake.songsDB[artist.Name][song] = newSong
 	}
 	return newSong, nil
 }

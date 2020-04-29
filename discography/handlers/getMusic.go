@@ -1,8 +1,7 @@
 package handlers
 
 import (
-	"MusicAppGo/common"
-	"discography/database"
+	"general"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -11,40 +10,42 @@ import (
 // ArtistStartingWith searches the database for artists that satisfies the criria
 func (handler *MusicHandler) ArtistStartingWith(response http.ResponseWriter, request *http.Request) {
 	firstLetter := mux.Vars(request)["firstLetter"]
-	if firstLetter == "0-9" {
-		handler.Logger.Printf("[Error] Trying to request non-implemented case %v\n", firstLetter)
-		http.Error(response, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
-	}
-	offsetMax := request.Context().Value(common.OffsetMax{}).(common.OffsetMax)
+	offsetMax := request.Context().Value(general.OffsetMax{}).(general.OffsetMax)
 	offset, max := offsetMax.Offset, offsetMax.Max
-	results, errorSearch := handler.db.GetArtistsStartingWith(firstLetter, offset, max+1)
+	handler.Logger.Printf("Received call for start %v and limit %v,%v\n", firstLetter, offset, max)
+	var results []general.Artist
+	var errorSearch error
+	if firstLetter == "0-9" {
+		results, errorSearch = handler.db.GetArtistsStartingWithNumber(offset, max+1)
+	} else {
+		results, errorSearch = handler.db.GetArtistsStartingWithLetter(firstLetter, offset, max+1)
+	}
 	if errorSearch != nil {
-		errorcode := errorSearch.(common.DBError).ErrorCode
-		if errorcode == common.InvalidOffsetMax {
+		if errorSearch.(general.DBError).ErrorCode == general.InvalidOffsetMax {
 			badRequests.Inc()
-			handler.Logger.Printf("Request with invalid  values for query parameters")
-			http.Error(response, errorSearch.Error(), http.StatusBadRequest)
+			handler.Logger.Printf("Request with invalid  values for query parameters: %v,%v", offset, max)
+			general.SendError(response, http.StatusBadRequest)
 			return
 		}
 		failureSearchRequest.Inc()
-		handler.Logger.Printf("Error %v: %v\n", errorcode, errorSearch.Error())
-		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		handler.Logger.Printf("[Error] Can't find artists starting with %v and limit %v,%v due to: %s\n", firstLetter, offset, max, errorSearch)
+		general.SendError(response, http.StatusInternalServerError)
 		return
 	}
 	if len(results) == 0 {
-		handler.Logger.Printf("Failed to find artists starting with %v\n", firstLetter)
+		handler.Logger.Printf("Failed to find artists starting with %v and limit %v,%v\n", firstLetter, offset, max)
 		failureSearchRequest.Inc()
-		http.Error(response, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		general.SendError(response, http.StatusNotFound)
 		return
 	}
-	handler.Logger.Printf("Succesfully found artists starting with %v\n", firstLetter)
+	handler.Logger.Printf("Succesfully found %v artists starting with %v and limit %v,%v\n", len(results), firstLetter, offset, max)
 	hasNext := (len(results) > max)
 	if hasNext {
 		results = results[0:max]
 	}
 	response.Header().Set("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)
-	err := common.ToJSON(&MultipleArtists{Music: results, HasNext: hasNext}, response)
+	err := general.WriteToJSON(&general.MultipleArtists{Data: results, HasNext: hasNext}, response)
 	if err != nil {
 		handler.Logger.Printf("[ERROR] %s\n", err)
 	}
@@ -53,47 +54,37 @@ func (handler *MusicHandler) ArtistStartingWith(response http.ResponseWriter, re
 // SongsFromArtist returns a set of songs from the requested artist
 func (handler *MusicHandler) SongsFromArtist(response http.ResponseWriter, request *http.Request) {
 	nameArtist := mux.Vars(request)["artist"]
-	offsetMax := request.Context().Value(common.OffsetMax{}).(common.OffsetMax)
+	offsetMax := request.Context().Value(general.OffsetMax{}).(general.OffsetMax)
 	offset, max := offsetMax.Offset, offsetMax.Max
+	handler.Logger.Printf("Received call for songs of %v and limit %v,%v\n", nameArtist, offset, max)
 	results, errorSearch := handler.db.GetSongsFromArtist(nameArtist, offset, max+1)
 	if errorSearch != nil {
-		errorcode := errorSearch.(common.DBError).ErrorCode
-		if errorcode == common.InvalidOffsetMax {
+		errorcode := errorSearch.(general.DBError).ErrorCode
+		if errorcode == general.InvalidOffsetMax {
 			badRequests.Inc()
-			handler.Logger.Printf("Request with invalid  values for query parameters")
-			http.Error(response, errorSearch.Error(), http.StatusBadRequest)
+			handler.Logger.Printf("Request with invalid  values for query parameters: %v,%v", offset, max)
+			general.SendError(response, http.StatusBadRequest)
 			return
 		}
 		failureSearchRequest.Inc()
-		handler.Logger.Printf("Error %v: %v\n", errorcode, errorSearch.Error())
-		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		handler.Logger.Printf("[Error] Can't find songs of %v and limit %v,%v due to: %s\n", nameArtist, offset, max, errorSearch)
+		general.SendError(response, http.StatusInternalServerError)
 		return
 	}
 	if len(results) == 0 {
-		handler.Logger.Printf("Failed to find songs of %v\n", nameArtist)
+		handler.Logger.Printf("Failed to find songs of %v and limit %v,%v\n", nameArtist, offset, max)
 		failureSearchRequest.Inc()
-		http.Error(response, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		general.SendError(response, http.StatusNotFound)
 		return
 	}
-	// We need to combine the results
-	multipleSongs := make([]database.SongDB, 0, len(results))
-	song := database.NewSongDB(results[0].SongID, results[0].SongName)
-	for _, rowArtist := range results {
-		if rowArtist.SongID != song.ID {
-			multipleSongs = append(multipleSongs, song)
-			song = database.NewSongDB(rowArtist.SongID, rowArtist.SongName)
-		}
-		song.Artists = append(song.Artists, database.NewRowArtistDB(rowArtist.ArtistID, rowArtist.ArtistName, rowArtist.ArtistPrefix))
-	}
-	multipleSongs = append(multipleSongs, song)
-	handler.Logger.Printf("Succesfully found songs from %v\n", nameArtist)
-	hasNext := (len(multipleSongs) > max)
+	handler.Logger.Printf("Succesfully found %v songs of %v and limit %v,%v\n", len(results), nameArtist, offset, max)
+	hasNext := (len(results) > max)
 	if hasNext {
-		multipleSongs = multipleSongs[0:max]
+		results = results[0:max]
 	}
 	response.Header().Set("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)
-	err := common.ToJSON(&MultipleSongs{Music: multipleSongs, HasNext: hasNext}, response)
+	err := general.WriteToJSON(&general.MultipleSongs{Data: results, HasNext: hasNext}, response)
 	if err != nil {
 		handler.Logger.Printf("[ERROR] %s\n", err)
 	}

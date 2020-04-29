@@ -1,0 +1,131 @@
+package general
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/gorilla/mux"
+)
+
+// TestSendMessageEmpty returns a SendMessageFunction for a handler that just returns nil
+func TestSendMessageEmpty() func(topic string, message []byte) error {
+	return func(topic string, message []byte) error {
+		return nil
+	}
+}
+
+// TestSendMessage returns a SendMessageFunction for a handler and two pointer to the topic and the message of the last message
+func TestSendMessage(wg *sync.WaitGroup) (*string, *string, func(topic string, message []byte)) {
+	topicValue, msgValue := "", ""
+	top, msg := &topicValue, &msgValue
+	return top, msg, func(topic string, message []byte) {
+		*top = topic
+		*msg = string(message)
+		wg.Done()
+	}
+}
+
+// TestSendMessageToParticularTopic returns a pointer to the message and a SendMessageFunction. It changes the value of the pointer only when the topic coincide with the given topic.
+func TestSendMessageToParticularTopic(wg *sync.WaitGroup, specificTopic string) (*string, func(topic string, message []byte)) {
+	msgValue := ""
+	msg := &msgValue
+	return msg, func(topic string, message []byte) {
+		if topic != specificTopic {
+			return
+		}
+		*msg = string(message)
+		if wg != nil {
+			wg.Done()
+		}
+	}
+}
+
+// TestPostRequest sends a post request to the given handler
+func TestPostRequest(t *testing.T, handler func(http.ResponseWriter, *http.Request), body interface{}) *httptest.ResponseRecorder {
+	bodyRequest, writer := io.Pipe()
+	go func() {
+		err := WriteToJSON(body, writer)
+		if err != nil {
+			t.Fatalf("Error in test helper: %s", err)
+		}
+		writer.Close()
+	}()
+	request := httptest.NewRequest("POST", "/", bodyRequest)
+	recorder := httptest.NewRecorder()
+	handler(recorder, request)
+	return recorder
+}
+
+// TestPostRequestWithContext sends a post request with the given context to the given handler
+func TestPostRequestWithContext(t *testing.T, handler func(http.ResponseWriter, *http.Request), body interface{}, contextType, contextValue interface{}) *httptest.ResponseRecorder {
+	bodyRequest, writer := io.Pipe()
+	go func() {
+		err := WriteToJSON(body, writer)
+		if err != nil {
+			t.Fatalf("Error in test helper: %s", err)
+		}
+		writer.Close()
+	}()
+	request := httptest.NewRequest("POST", "/", bodyRequest)
+	ctx := context.WithValue(request.Context(), contextType, contextValue)
+	request = request.WithContext(ctx)
+	recorder := httptest.NewRecorder()
+	handler(recorder, request)
+	return recorder
+}
+
+// TestGetRequestWithContext sends a get request to the given handler containing the given contextType and contextValue
+func TestGetRequestWithContext(t *testing.T, handler func(http.ResponseWriter, *http.Request), contextType, contextValue interface{}) *httptest.ResponseRecorder {
+	request := httptest.NewRequest("GET", "/", nil)
+	ctx := context.WithValue(request.Context(), contextType, contextValue)
+	request = request.WithContext(ctx)
+	recorder := httptest.NewRecorder()
+	handler(recorder, request)
+	return recorder
+}
+
+// TestGetRequestWithPath sends a get request with a path variable to the given handler
+func TestGetRequestWithPath(t *testing.T, handler func(http.ResponseWriter, *http.Request), pathVariable, pathValue, query string, middleware ...func(*log.Logger) func(http.Handler) http.Handler) *httptest.ResponseRecorder {
+	if pathVariable == "" {
+		t.Fatalf("Can't send get request due to empty pathVariable\n")
+	}
+	path := fmt.Sprintf("/{%v}", pathVariable)
+	router := mux.NewRouter()
+	emptyLogger := TestEmptyLogger()
+	for _, middlewareFunction := range middleware {
+		router.Use(middlewareFunction(emptyLogger))
+	}
+	router.Path(path).HandlerFunc(handler)
+	var url string
+	if query != "" {
+		url = fmt.Sprintf("/%v?%v", pathValue, query)
+	} else {
+		url = fmt.Sprintf("/%v", pathValue)
+	}
+	url = strings.ReplaceAll(url, " ", "%20")
+	request := httptest.NewRequest("GET", url, nil)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	return recorder
+}
+
+// TestWriter is an empty struct that can be used as an empty io.writer
+type TestWriter struct{}
+
+func (fake TestWriter) Write(p []byte) (n int, err error) {
+	n = len(p)
+	err = nil
+	return
+}
+
+// TestEmptyLogger return an empty logger
+func TestEmptyLogger() *log.Logger {
+	return log.New(TestWriter{}, "TEST", log.LstdFlags|log.Lshortfile)
+}

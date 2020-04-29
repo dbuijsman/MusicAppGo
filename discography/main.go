@@ -1,22 +1,16 @@
 package main
 
 import (
-	"MusicAppGo/common"
-	"context"
+	"general"
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
-	"time"
 
 	"discography/database"
 	"discography/handlers"
 
 	"github.com/gorilla/mux"
 	"github.com/optiopay/kafka/v2"
-	"github.com/optiopay/kafka/v2/proto"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"database/sql"
@@ -26,8 +20,6 @@ import (
 
 const port string = ":9002"
 const servername string = "discography"
-
-var kafkaAddrs = []string{"localhost:9092", "localhost:9093"}
 
 func main() {
 	logger := log.New(os.Stdout, servername, log.LstdFlags|log.Lshortfile)
@@ -42,40 +34,14 @@ func main() {
 		return
 	}
 	defer db.Close()
-	producer, closeBroker := connectToKafka()
+	broker, closeBroker := general.ConnectToKafka(logger, servername)
 	defer closeBroker()
-	sendMessage := func(topic string, message []byte) error {
-		msg := &proto.Message{Value: []byte(message)}
-		_, err := producer.Produce(topic, 0, msg)
-		return err
+	if topicErr := general.CreateTopics(broker, logger, "newArtist", "newSong"); err != nil {
+		logger.Fatalf("[ERROR] Failed to create topics due to: %s\n", topicErr)
 	}
-	handler := handlers.NewMusicHandler(logger, database.NewMusicDB(db), sendMessage)
-	// Create the Server
-	server := &http.Server{
-		Addr:     port,
-		Handler:  initRoutes(handler),
-		ErrorLog: logger,
-	}
-
-	// start the server
-	go func() {
-		logger.Printf("Starting server %v on port %v\n", servername, server.Addr)
-		err := server.ListenAndServe()
-		if err != nil {
-			logger.Printf("[ERROR] Closing server %v: %s\n", servername, err)
-			os.Exit(1)
-		}
-	}()
-
-	// trap sigterm or interupt and gracefully shutdown the server
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	signal.Notify(c, os.Kill)
-	sig := <-c
-	logger.Printf("Closing server %v due to %v signal\n", servername, sig)
-	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
-	server.Shutdown(ctx)
-	logger.Printf("Closed server %v!\n", servername)
+	producer := broker.Producer(kafka.NewProducerConf())
+	music := handlers.NewMusicHandler(logger, database.NewMusicDB(db), general.GetSendMessage(producer))
+	general.StartServer(servername, port, initRoutes(music), logger)
 }
 
 // initRoutes returns a router which can handle all the requests for this microservice
@@ -83,30 +49,17 @@ func initRoutes(handler *handlers.MusicHandler) *mux.Router {
 	router := mux.NewRouter()
 	router.Handle("/metrics", promhttp.Handler())
 
-	getR := router.Methods(http.MethodGet).Subrouter()
-	getR.Use(common.GetOffsetMaxMiddleware(handler.Logger))
+	getR := router.PathPrefix("/api").Methods(http.MethodGet).Subrouter()
+	getR.Use(general.GetOffsetMaxMiddleware(handler.Logger))
 	getR.Path("/artists/{firstLetter}").HandlerFunc(handler.ArtistStartingWith)
 	getR.Path("/artist/{artist}").HandlerFunc(handler.SongsFromArtist)
+
+	adminR := router.PathPrefix("/admin").Subrouter()
+	adminR.Use(general.GetIsAdminMiddleware(handler.Logger))
+	adminR.Path("/artist").Methods(http.MethodPost).HandlerFunc(handler.AddArtist)
+
+	internalR := router.PathPrefix("/intern").Methods(http.MethodGet).Subrouter()
+	internalR.Use(general.GetInternalRequestMiddleware(handler.Logger))
+	internalR.Path("/song/{id}").HandlerFunc(handler.FindSongByID)
 	return router
 }
-
-func connectToKafka() (producer kafka.Producer, closeBroker func()) {
-	conf := kafka.NewBrokerConf(servername)
-	conf.AllowTopicCreation = true
-
-	// connect to kafka cluster
-	broker, err := kafka.Dial(kafkaAddrs, conf)
-	if err != nil {
-		log.Fatalf("cannot connect to kafka cluster: %s", err)
-	}
-	producer = broker.Producer(kafka.NewProducerConf())
-	closeBroker = broker.Close
-	return
-}
-
-var (
-	badRequests = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "users_badRequests_total",
-		Help: "The total number of bad requests send to the users server",
-	})
-)

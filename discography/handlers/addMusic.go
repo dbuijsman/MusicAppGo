@@ -1,133 +1,115 @@
 package handlers
 
 import (
-	"MusicAppGo/common"
-	"discography/database"
+	"general"
 	"net/http"
 	"strings"
-
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-)
-
-var (
-	succesNewArtist = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "admin_new_artist_total",
-		Help: "The total number of succesfull requests to add a new artist to the database",
-	})
-)
-
-var (
-	failedNewArtist = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "admin_new_artist_denied_total",
-		Help: "The total number of failed requests to add a new artist to the database",
-	})
 )
 
 // AddArtist will add a new artist to the database
 func (handler *MusicHandler) AddArtist(response http.ResponseWriter, request *http.Request) {
-	var newArtist NewArtist
-	if err := common.FromJSON(&newArtist, request.Body); err != nil {
+	var newArtist ClientArtist
+	if err := general.ReadFromJSON(&newArtist, request.Body); err != nil {
 		badRequests.Inc()
 		handler.Logger.Printf("Got invalid request to add a new artist: %v\n", err)
-		http.Error(response, "Data received in incorrect format.", http.StatusBadRequest)
+		general.SendError(response, http.StatusBadRequest)
 		return
 	}
-	artist, prefix := seperatePrefix(newArtist.Name)
-	if _, err := handler.db.AddArtist(artist, prefix, newArtist.LinkSpotify); err != nil {
-		if err.(common.DBError).ErrorCode == common.DuplicateEntry {
-			handler.Logger.Printf("Duplicate artist: %v\n", artist)
-			http.Error(response, "This artist is already in the database", http.StatusUnprocessableEntity)
+	artist, prefix := seperatePrefix(newArtist.Artist)
+	handler.Logger.Printf("Received call for adding new artist %v, %v with link %v\n", artist, prefix, newArtist.LinkSpotify)
+	if _, err := handler.AddNewArtist(artist, prefix, newArtist.LinkSpotify); err != nil {
+		if err.(general.DBError).ErrorCode != general.DuplicateEntry {
+			general.SendError(response, http.StatusInternalServerError)
 			return
 		}
-		failedNewArtist.Inc()
-		handler.Logger.Printf("[ERROR] Failed to save artist in database: %v\n", err.Error())
-		http.Error(response, "Internal server error", http.StatusInternalServerError)
+		http.Error(response, "This artist already exists", http.StatusUnprocessableEntity)
 		return
 	}
-	go func(handler *MusicHandler, artist, prefix string) {
-		msg, err := common.ToJSONBytes(database.NewRowArtistDB(0, artist, prefix))
-		if err != nil {
-			handler.Logger.Printf("[ERROR] Failed to convert %v %v to bytes: %v\n", prefix, artist, err)
-			return
-		}
-		handler.SendMessage("newArtist", msg)
-	}(handler, artist, prefix)
-	handler.Logger.Printf("Succesfully added new artist %v\n", artist)
 	succesNewArtist.Inc()
 	response.WriteHeader(http.StatusOK)
 	response.Write([]byte(http.StatusText(http.StatusOK)))
 }
 
-var (
-	succesNewSong = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "admin_new_song_total",
-		Help: "The total number of succesfull requests to add a new song to the database",
-	})
-)
-
-var (
-	failedNewSong = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "admin_new_song_denied_total",
-		Help: "The total number of failed requests to add a new song to the database",
-	})
-)
+// AddNewArtist adds a new artist to the database. It returns an error when
+func (handler *MusicHandler) AddNewArtist(artist, prefix, linkSpotify string) (general.Artist, error) {
+	handler.Logger.Printf("Trying to add %v, %v to DB\n", artist, prefix)
+	newArtist, err := handler.db.AddArtist(artist, prefix, linkSpotify)
+	if err != nil {
+		if err.(general.DBError).ErrorCode != general.DuplicateEntry {
+			failedNewArtist.Inc()
+			handler.Logger.Printf("[ERROR] Failed to add %v, %v due to: %s\n", artist, prefix, err)
+			return general.Artist{}, general.ErrorToUnknownDBError(err)
+		}
+		handler.Logger.Printf("Artist %v, %v already exists\n", artist, prefix)
+		return general.Artist{}, general.GetDBError("This artist is already in the database", general.DuplicateEntry)
+	}
+	go func(handler *MusicHandler, newArtist general.Artist) {
+		msg, err := general.ToJSONBytes(newArtist)
+		if err != nil {
+			handler.Logger.Printf("[ERROR] Failed to convert %v, %v to bytes: %v\n", newArtist.Name, newArtist.Prefix, err)
+			return
+		}
+		handler.SendMessage("newArtist", msg)
+	}(handler, newArtist)
+	handler.Logger.Printf("Succesfully added new artist %v\n", artist)
+	return newArtist, nil
+}
 
 // AddSong adds a song to the database. It will returns the new song in a SongDB struct
-func (handler *MusicHandler) AddSong(song string, artists ...string) (database.SongDB, error) {
+func (handler *MusicHandler) AddSong(song string, artists ...string) (general.Song, error) {
 	if song == "" {
-		handler.Logger.Printf("Received call to add a song without a song")
-		return database.SongDB{}, common.GetDBError("Missing song", common.IncompleteInput)
+		handler.Logger.Printf("Can't add song without a name: %v - %v\n", artists, song)
+		return general.Song{}, general.GetDBError("Missing song", general.InvalidInput)
 	}
 	if len(artists) == 0 {
-		handler.Logger.Printf("Received call to add a song without an artist")
-		return database.SongDB{}, common.GetDBError("Missing artists", common.IncompleteInput)
+		handler.Logger.Printf("Can't add song without artists: %v - %v\n", artists, song)
+		return general.Song{}, general.GetDBError("Missing artists", general.InvalidInput)
 	}
-	contributingArtists := make([]database.RowArtistDB, 0, len(artists))
-	for _, artistName := range artists { // Adding all artists to a []RowArtistDB
-		artist, err := handler.db.FindArtist(artistName)
+	handler.Logger.Printf("Trying to add %v - %v\n", artists, song)
+	// For every given artist we are going to find the same artist from the DB or add a new artist to the DB
+	contributingArtists := make([]general.Artist, 0, len(artists))
+	for _, artistName := range artists {
+		name, prefix := seperatePrefix(artistName)
+		artist, err := handler.db.FindArtistByName(name)
 		if err != nil {
-			handler.Logger.Printf("Can't find artist %v while adding a new song\n", artist)
-			newArtist, prefix := seperatePrefix(artistName)
-			artist, err = handler.db.AddArtist(newArtist, prefix, "")
+			if err.(general.DBError).ErrorCode != general.NotFoundError {
+				handler.Logger.Printf("[ERROR] Failed to search for artist %v due to: %s/n", name, err)
+				return general.Song{}, err
+			}
+			handler.Logger.Printf("Can't find artist %v while adding a new song\n", name)
+			artist, err = handler.AddNewArtist(name, prefix, "")
 			if err != nil {
 				failedNewSong.Inc()
 				handler.Logger.Printf("[ERROR] Can't find or add artist %v: %v\n", artist, err)
-				return database.SongDB{}, err
+				return general.Song{}, general.ErrorToUnknownDBError(err)
 			}
-			handler.Logger.Printf("Succesfully added new artist %v\n", artist)
 		}
 		contributingArtists = append(contributingArtists, artist)
 	}
-	// Check if the song already exists
-	if existingSong, err := handler.db.FindSong(contributingArtists[0].Artist, song); err == nil || err.(common.DBError).ErrorCode != common.NotFoundError {
-		if err == nil { // The song already exists
-			handler.Logger.Printf("Trying to add %v - %v but this song already exists (ID %v)\n", contributingArtists[0].Artist, song, existingSong.ID)
-			return database.SongDB{}, common.GetDBError("Duplicate entry", common.DuplicateEntry)
-		}
-		failedNewSong.Inc()
-		handler.Logger.Printf("[ERROR] Failed to add new song %v - %v to database: %v\n", contributingArtists[0].Artist, song, err)
-		return database.SongDB{}, common.GetDBError(err.Error(), common.UnknownError)
-	}
+	handler.Logger.Printf("Found all artists belonging to %v - %v\n", artists, song)
 	newSong, err := handler.db.AddSong(song, contributingArtists)
 	if err != nil {
-		handler.Logger.Printf("[ERROR] Failed to add new song %v - %v to database: %v\n", contributingArtists[0].Artist, song, err)
-		failedNewSong.Inc()
-	} else {
-		go func(handler *MusicHandler, artists []database.RowArtistDB, song string) {
-			newSong := database.NewSongDB(0, song)
-			newSong.Artists = artists
-			msg, err := common.ToJSONBytes(newSong)
-			if err != nil {
-				handler.Logger.Printf("[ERROR] Failed to convert %v - %v to bytes: %v\n", contributingArtists, song, err)
-				return
-			}
-			handler.SendMessage("newSong", msg)
-		}(handler, contributingArtists, song)
-		handler.Logger.Printf("Succsefully added new song %v - %v\n", contributingArtists, song)
-		succesNewSong.Inc()
+		if err.(general.DBError).ErrorCode != general.DuplicateEntry {
+			handler.Logger.Printf("[ERROR] Failed to add new song %v - %v to database: %v\n", artists, song, err)
+			failedNewSong.Inc()
+			return general.Song{}, general.ErrorToUnknownDBError(err)
+		}
+		handler.Logger.Printf("Trying to add %v - %v but this song already exists\n", artists, song)
+		return general.Song{}, general.GetDBError("Duplicate entry", general.DuplicateEntry)
 	}
-	return newSong, err
+	// Sending message to topic newSong
+	go func(handler *MusicHandler, newSong general.Song) {
+		msg, err := general.ToJSONBytes(newSong)
+		if err != nil {
+			handler.Logger.Printf("[ERROR] Failed to convert %v - %v to bytes: %v\n", newSong.Artists, newSong.Name, err)
+			return
+		}
+		handler.SendMessage("newSong", msg)
+	}(handler, newSong)
+
+	handler.Logger.Printf("Succesfully added new song %v - %v\n", contributingArtists, song)
+	succesNewSong.Inc()
+	return newSong, nil
 }
 
 func seperatePrefix(name string) (artist, prefix string) {
