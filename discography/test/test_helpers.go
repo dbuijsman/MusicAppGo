@@ -119,7 +119,7 @@ func (fake testDB) AddArtist(artist, prefix, linkSpotify string) (general.Artist
 	if _, ok := fake.artistsDB[artist]; ok {
 		return general.Artist{}, general.GetDBError("Duplicate artist", general.DuplicateEntry)
 	}
-	newArtist := testArtist{id: len(fake.artistsDB), name: artist, prefix: prefix, linkSpotify: linkSpotify}
+	newArtist := testArtist{id: len(fake.artistsDB) + 1, name: artist, prefix: prefix, linkSpotify: linkSpotify}
 	fake.artistsDB[artist] = newArtist
 	fake.songsDB[artist] = make(map[string]general.Song)
 	return general.NewArtist(newArtist.id, newArtist.name, newArtist.prefix), nil
