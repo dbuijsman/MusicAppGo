@@ -25,13 +25,16 @@ jobs:
             cd general && go get -v -t -d ./... && cd ..
             cd users && go get -v -t -d ./... && cd ..
             cd discography && go get -v -t -d ./... && cd ..
+            cd likes && go get -v -t -d ./... && cd ..
 
     - name: Build
       run: |
            cd general && go build . && cd ..
            cd users && go build . && cd ..
            cd discography && go build && cd ..
+           cd likes && go build && cd ..
     - name: Test
       run: |
            cd users && go test ./test && cd ..
            cd discography && go test ./test && cd ..
+           cd likes && go test ./test && cd ..
