@@ -30,7 +30,7 @@ func (handler *UserHandler) SignUp(response http.ResponseWriter, request *http.R
 	handler.Logger.Printf("Succesfully added new user: %v\n", creds.Username)
 	newUser := general.Credentials{ID: userID, Username: creds.Username}
 	go func(credentials general.Credentials) {
-		msg, _ := general.ToJSONBytes(creds)
+		msg, _ := general.ToJSONBytes(&newUser)
 		if err != nil {
 			handler.Logger.Printf("[ERROR] Failed to convert user with ID:%v, username: %v to bytes: %v\n", credentials.ID, credentials.Username, err)
 			return
