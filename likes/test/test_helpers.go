@@ -5,9 +5,13 @@ import (
 	"general"
 	"io"
 	"likes/handlers"
+	"log"
+	"math"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 func testLikesHandlerNilRequest(db testDB) *handlers.LikesHandler {
@@ -149,4 +153,81 @@ func (fake testDB) RemoveDislike(userID, songID int) error {
 		delete(fake.dislikes[userID], songID)
 	}
 	return nil
+}
+
+func (fake testDB) GetLikes(userID, offset, max int) ([]general.Song, error) {
+	if max <= 0 || offset < 0 {
+		return nil, general.GetDBError("Can not search with negative offset or non-positive max", general.InvalidOffsetMax)
+	}
+	likesUser := fake.likes[userID]
+	songNames := make([]general.Song, 0, len(likesUser))
+	for _, song := range likesUser {
+		songNames = append(songNames, song)
+	}
+	sort.SliceStable(songNames, func(i, j int) bool {
+		return songNames[i].Name < songNames[j].Name
+	})
+	searchResults := make([]general.Song, 0, max)
+	for indexResult := offset; indexResult < int(math.Min(float64(offset+max), float64(len(songNames)))); indexResult++ {
+		likedSong := likesUser[songNames[indexResult].ID]
+		likedSong.Preference = "like"
+		searchResults = append(searchResults, likedSong)
+	}
+	return searchResults, nil
+}
+
+func (fake testDB) GetDislikes(userID, offset, max int) ([]general.Song, error) {
+	if max <= 0 || offset < 0 {
+		return nil, general.GetDBError("Can not search with negative offset or non-positive max", general.InvalidOffsetMax)
+	}
+	dislikesUser := fake.dislikes[userID]
+	dislikedSongs := make([]general.Song, 0, len(dislikesUser))
+	for _, song := range dislikesUser {
+		dislikedSongs = append(dislikedSongs, song)
+	}
+	sort.SliceStable(dislikedSongs, func(i, j int) bool {
+		return dislikedSongs[i].Name < dislikedSongs[j].Name
+	})
+	searchResults := make([]general.Song, 0, max)
+	for indexResult := offset; indexResult < int(math.Min(float64(offset+max), float64(len(dislikedSongs)))); indexResult++ {
+		dislikedSong := dislikesUser[dislikedSongs[indexResult].ID]
+		dislikedSong.Preference = "dislike"
+		searchResults = append(searchResults, dislikedSong)
+	}
+	return searchResults, nil
+}
+func (fake testDB) GetLikesIDFromArtistName(logger *log.Logger, userID int, nameArtist string, channel chan<- int, wg *sync.WaitGroup) {
+	defer close(channel)
+	likesUser := fake.likes[userID]
+	for id, song := range likesUser {
+		for _, artist := range song.Artists {
+			if artist.Name == nameArtist {
+				channel <- id
+				continue
+			}
+		}
+	}
+	wg.Done()
+}
+
+func (fake testDB) GetDislikesIDFromArtistName(logger *log.Logger, userID int, nameArtist string, channel chan<- int, wg *sync.WaitGroup) {
+	defer close(channel)
+	dislikesUser := fake.dislikes[userID]
+	for id, song := range dislikesUser {
+		for _, artist := range song.Artists {
+			if artist.Name == nameArtist {
+				channel <- id
+				continue
+			}
+		}
+	}
+	wg.Done()
+}
+
+type preference struct {
+	user, song int
+}
+
+func newPreference(user, song int) preference {
+	return preference{user: user, song: song}
 }

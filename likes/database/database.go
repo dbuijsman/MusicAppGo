@@ -3,6 +3,8 @@ package database
 import (
 	"database/sql"
 	"general"
+	"log"
+	"sync"
 )
 
 // Database is an interface for the likes database
@@ -14,6 +16,10 @@ type Database interface {
 	AddDislike(userID, songID int) error
 	RemoveLike(userID, songID int) error
 	RemoveDislike(userID, songID int) error
+	GetLikes(userID, offset, max int) ([]general.Song, error)
+	GetDislikes(userID, offset, max int) ([]general.Song, error)
+	GetLikesIDFromArtistName(logger *log.Logger, userID int, nameArtist string, channel chan<- int, wg *sync.WaitGroup)
+	GetDislikesIDFromArtistName(logger *log.Logger, userID int, nameArtist string, channel chan<- int, wg *sync.WaitGroup)
 }
 
 // LikesDB is a database
