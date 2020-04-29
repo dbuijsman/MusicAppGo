@@ -179,7 +179,6 @@ func TestSongsFromArtist_amountResults(t *testing.T) {
 			t.Fatalf("[ERROR] %v: Decoding response: %v\n", nameCase, err)
 		}
 		if len(result.Data) != testCase.expectedAmountResults {
-			fmt.Println(result.Data)
 			t.Errorf("%v: Searching for songs of %v, offset %v and max %v should give %v results but got %v\n", nameCase, testCase.artist, testCase.offset, testCase.max, testCase.expectedAmountResults, len(result.Data))
 		}
 	}

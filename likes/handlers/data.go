@@ -55,3 +55,10 @@ var (
 		Help: "The total number of bad requests send to the users server",
 	})
 )
+
+var (
+	failureGetRequest = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "likes_failed_get_request_total",
+		Help: "The total number of failed requests to find preferences of an user that satisfies the requirements",
+	})
+)
