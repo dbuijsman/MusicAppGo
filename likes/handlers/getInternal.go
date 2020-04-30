@@ -27,10 +27,12 @@ func (handler *LikesHandler) GetPreferencesOfArtist(response http.ResponseWriter
 	wg.Add(2)
 	go func(wg *sync.WaitGroup) {
 		wg.Wait()
+		handler.Logger.Printf("Found all preferences of user #%v\n", userID)
 		doneChan <- true
 	}(&wg)
 	go handler.db.GetLikesIDFromArtistName(handler.Logger, userID, nameArtist, likesChan, &wg)
 	go handler.db.GetDislikesIDFromArtistName(handler.Logger, userID, nameArtist, dislikesChan, &wg)
+LOOP:
 	for {
 		select {
 		case like := <-likesChan:
@@ -38,7 +40,8 @@ func (handler *LikesHandler) GetPreferencesOfArtist(response http.ResponseWriter
 		case dislike := <-dislikesChan:
 			results[dislike] = "dislike"
 		case <-doneChan:
-			break
+			handler.Logger.Printf("Stop waiting for more results for user #%v\n", userID)
+			break LOOP
 		}
 	}
 	handler.Logger.Printf("User #%v has %v preferences of songs of artist %v\n", userID, len(results), nameArtist)

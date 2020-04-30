@@ -10,6 +10,7 @@ func (db *MusicDB) GetArtistsStartingWithLetter(startLetter string, offset, max 
 	if max <= 0 || offset < 0 {
 		return nil, general.GetDBError("Can not search with negative offset or non-positive max", general.InvalidOffsetMax)
 	}
+	startLetter = startLetter + "%"
 	results, err := db.database.Query("SELECT id, name_artist, prefix FROM artists WHERE name_artist LIKE ? ORDER BY name_artist LIMIT ?,?;", startLetter, offset, max)
 	if err != nil {
 		return nil, general.ErrorToUnknownDBError(err)

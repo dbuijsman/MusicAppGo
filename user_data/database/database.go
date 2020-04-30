@@ -34,7 +34,7 @@ func NewUserDB(db *sql.DB) *UserDB {
 func (db *UserDB) SignUp(username, password string) (int, error) {
 	salt := generateSalt()
 	hash := hashPass(password, string(salt))
-	result, err := db.database.Exec("INSERT INTO users(username, password,salt) VALUES ( ?, ?,?)", username, hash, salt)
+	result, err := db.database.Exec("INSERT INTO users(username, password,salt, role) VALUES ( ?, ?,?, ?)", username, hash, salt, "user")
 	if err != nil {
 		return 0, general.MySQLErrorToDBError(err)
 	}

@@ -20,6 +20,11 @@ func (handler *LikesHandler) GetLikes(response http.ResponseWriter, request *htt
 			general.SendError(response, http.StatusBadRequest)
 			return
 		}
+		if errorcode == general.NotFoundError {
+			handler.Logger.Printf("Request with no results for user %v: %v,%v", user.Username, offset, max)
+			general.SendError(response, http.StatusNotFound)
+			return
+		}
 		failureGetRequest.Inc()
 		handler.Logger.Printf("[Error] Can't find likes of user %v and limit %v,%v due to: %s\n", user.Username, offset, max, errorSearch)
 		general.SendError(response, http.StatusInternalServerError)
@@ -57,6 +62,11 @@ func (handler *LikesHandler) GetDislikes(response http.ResponseWriter, request *
 			badRequests.Inc()
 			handler.Logger.Printf("Request with invalid  values for query parameters: %v,%v", offset, max)
 			general.SendError(response, http.StatusBadRequest)
+			return
+		}
+		if errorcode == general.NotFoundError {
+			handler.Logger.Printf("Request with no results for user %v: %v,%v", user.Username, offset, max)
+			general.SendError(response, http.StatusNotFound)
 			return
 		}
 		failureGetRequest.Inc()

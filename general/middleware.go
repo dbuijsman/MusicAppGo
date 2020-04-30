@@ -42,7 +42,7 @@ func validateToken(tokenString string) (Credentials, error) {
 func GetValidateTokenMiddleWare(logger *log.Logger) func(http.Handler) http.Handler {
 	return toMiddlerWare(func(response http.ResponseWriter, request *http.Request, next http.Handler) {
 		if request.Header["Token"] == nil {
-			logger.Println("[WARNING] Unauthorized request.")
+			logger.Println("[WARNING] Unauthorized request\n")
 			http.Error(response, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}

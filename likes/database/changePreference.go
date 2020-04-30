@@ -1,10 +1,14 @@
 package database
 
-import "general"
+import (
+	"fmt"
+	"general"
+)
 
 // AddLike adds a new like to the database
 func (db *LikesDB) AddLike(userID, songID int) error {
-	_, err := db.database.Exec("INSERT INTO liked_songs (user_id,song_id) SELECT * FROM (SELECT ?, ?) AS tmp WHERE NOT EXISTS ( SELECT user_id, song_id FROM liked_songs WHERE user_id=? AND song_id=?) LIMIT 1;", userID, songID, userID, songID)
+	query := fmt.Sprintf("INSERT INTO liked_songs (user_id,song_id) SELECT * FROM (SELECT %v, %v) AS tmp WHERE NOT EXISTS ( SELECT user_id, song_id FROM liked_songs WHERE user_id=? AND song_id=?) LIMIT 1;", userID, songID)
+	_, err := db.database.Exec(query, userID, songID)
 	if err != nil {
 		return general.MySQLErrorToDBError(err)
 	}
@@ -13,7 +17,8 @@ func (db *LikesDB) AddLike(userID, songID int) error {
 
 // AddDislike adds a new dislike to the database
 func (db *LikesDB) AddDislike(userID, songID int) error {
-	_, err := db.database.Exec("INSERT INTO disliked_songs (user_id,song_id) SELECT * FROM (SELECT ?, ?) AS tmp WHERE NOT EXISTS ( SELECT user_id, song_id FROM liked_songs WHERE user_id=? AND song_id=?) LIMIT 1;", userID, songID, userID, songID)
+	query := fmt.Sprintf("INSERT INTO disliked_songs (user_id,song_id) SELECT * FROM (SELECT %v, %v) AS tmp WHERE NOT EXISTS ( SELECT user_id, song_id FROM liked_songs WHERE user_id=? AND song_id=?) LIMIT 1;", userID, songID)
+	_, err := db.database.Exec(query, userID, songID)
 	if err != nil {
 		return general.MySQLErrorToDBError(err)
 	}

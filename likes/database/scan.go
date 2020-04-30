@@ -57,5 +57,8 @@ func connectArtistsAndSongs(input <-chan artistAndSong, output chan<- general.So
 		}
 		lastFoundSong.Artists = append(lastFoundSong.Artists, artistSong.artist)
 	}
+	if lastFoundSong.ID == 0 {
+		return
+	}
 	output <- lastFoundSong
 }

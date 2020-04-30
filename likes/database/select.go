@@ -35,6 +35,7 @@ func (db *LikesDB) GetDislikes(userID, offset, max int) ([]general.Song, error) 
 // GetLikesIDFromArtistName searches all the songIDs of songs of the given artist that are liked by the given user and sends these to the given channel
 func (db *LikesDB) GetLikesIDFromArtistName(logger *log.Logger, userID int, nameArtist string, channel chan<- int, wg *sync.WaitGroup) {
 	defer close(channel)
+	defer wg.Done()
 	results, err := db.database.Query("SELECT liked_songs.song_id FROM liked_songs, discography, artists WHERE user_id=? AND liked_songs.song_id=discography.song_id AND artist_id=artists.id AND name_artist=?;", userID, nameArtist)
 	if err != nil {
 		logger.Printf("[ERROR] Can't search db for likes of user #%v for artist %v due to: %v\n", userID, nameArtist, err)
@@ -49,12 +50,13 @@ func (db *LikesDB) GetLikesIDFromArtistName(logger *log.Logger, userID int, name
 		}
 		channel <- songID
 	}
-	wg.Done()
+	logger.Printf("Found all likes for user #%v\n", userID)
 }
 
 // GetDislikesIDFromArtistName searches all the songIDs of songs of the given artist that are disliked by the given user and sends these to the given channel
 func (db *LikesDB) GetDislikesIDFromArtistName(logger *log.Logger, userID int, nameArtist string, channel chan<- int, wg *sync.WaitGroup) {
 	defer close(channel)
+	defer wg.Done()
 	results, err := db.database.Query("SELECT disliked_songs.song_id FROM disliked_songs, discography, artists WHERE user_id=? AND disliked_songs.song_id=discography.song_id AND artist_id=artists.id AND name_artist=?;", userID, nameArtist)
 	if err != nil {
 		logger.Printf("[ERROR] Can't search db for dislikes of user #%v for artist %v due to: %v\n", userID, nameArtist, err)
@@ -69,5 +71,5 @@ func (db *LikesDB) GetDislikesIDFromArtistName(logger *log.Logger, userID int, n
 		}
 		channel <- songID
 	}
-	wg.Done()
+	logger.Printf("Found all dislikes for user #%v\n", userID)
 }
