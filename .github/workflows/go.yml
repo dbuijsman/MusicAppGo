@@ -22,19 +22,21 @@ jobs:
 
     - name: Get dependencies
       run: |
-            cd general && go get -v -t -d ./... && cd ..
-            cd user_data && go get -v -t -d ./... && cd ..
-            cd discography && go get -v -t -d ./... && cd ..
-            cd likes && go get -v -t -d ./... && cd ..
+        cd gateway && go get -v -t -d ./... && cd ..
+        cd general && go get -v -t -d ./... && cd ..
+        cd user_data && go get -v -t -d ./... && cd ..
+        cd discography && go get -v -t -d ./... && cd ..
+        cd likes && go get -v -t -d ./... && cd ..
 
     - name: Build
       run: |
-           cd general && go build . && cd ..
-           cd user_data && go build . && cd ..
-           cd discography && go build && cd ..
-           cd likes && go build && cd ..
+        cd gateway && go build . && cd ..
+        cd general && go build . && cd ..
+        cd user_data && go build . && cd ..
+        cd discography && go build && cd ..
+        cd likes && go build && cd ..
     - name: Test
       run: |
-           cd user_data && go test ./test && cd ..
-           cd discography && go test ./test && cd ..
-           cd likes && go test ./test && cd ..
+        cd user_data && go test ./test && cd ..
+        cd discography && go test ./test && cd ..
+        cd likes && go test ./test && cd ..
