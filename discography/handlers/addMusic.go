@@ -55,6 +55,30 @@ func (handler *MusicHandler) AddNewArtist(artist, prefix, linkSpotify string) (g
 	return newArtist, nil
 }
 
+// AddSongHandler is the handler used for adding a new song to the database
+func (handler *MusicHandler) AddSongHandler(response http.ResponseWriter, request *http.Request) {
+	var newArtist ClientSong
+	if err := general.ReadFromJSON(&newArtist, request.Body); err != nil {
+		badRequests.Inc()
+		handler.Logger.Printf("Got invalid request to add a new artist: %v\n", err)
+		general.SendError(response, http.StatusBadRequest)
+		return
+	}
+	handler.Logger.Printf("Received call for adding new song %v - %v with link %v\n", newArtist.Artists, newArtist.Name)
+	if _, err := handler.AddSong(newArtist.Name, newArtist.Artists...); err != nil {
+		if err.(general.DBError).ErrorCode != general.DuplicateEntry {
+			general.SendError(response, http.StatusInternalServerError)
+			return
+		}
+		http.Error(response, "This artist already exists", http.StatusUnprocessableEntity)
+		return
+	}
+	succesNewArtist.Inc()
+	response.WriteHeader(http.StatusOK)
+	response.Write([]byte(http.StatusText(http.StatusOK)))
+
+}
+
 // AddSong adds a song to the database. It will returns the new song in a SongDB struct
 func (handler *MusicHandler) AddSong(song string, artists ...string) (general.Song, error) {
 	if song == "" {

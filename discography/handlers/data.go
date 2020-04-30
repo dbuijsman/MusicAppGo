@@ -9,6 +9,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+const portLikes string = ":9004"
+
 // MusicHandler consists of a logger and a database
 type MusicHandler struct {
 	Logger      *log.Logger
@@ -32,6 +34,12 @@ func NewMusicHandler(l *log.Logger, db database.Database, sendMessage func(strin
 type ClientArtist struct {
 	Artist      string `json:"artist" validate:"required"`
 	LinkSpotify string `json:"linkSpotify"`
+}
+
+// ClientSong is the form that is used in posting a new song from the client side
+type ClientSong struct {
+	Artists []string `json:"artists" validate:"required"`
+	Name    string   `json:"song" validate:"required"`
 }
 
 // NewClientArtist returns a ClientArtist containing the given data

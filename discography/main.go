@@ -48,6 +48,7 @@ func initRoutes(handler *handlers.MusicHandler) *mux.Router {
 	router.Handle("/metrics", promhttp.Handler())
 
 	getR := router.PathPrefix("/api").Methods(http.MethodGet).Subrouter()
+	getR.Use(general.GetAddTokenToContextMiddleware(handler.Logger))
 	getR.Use(general.GetOffsetMaxMiddleware(handler.Logger))
 	getR.Path("/artists/{firstLetter}").HandlerFunc(handler.ArtistStartingWith)
 	getR.Path("/artist/{artist}").HandlerFunc(handler.SongsFromArtist)
@@ -55,6 +56,7 @@ func initRoutes(handler *handlers.MusicHandler) *mux.Router {
 	adminR := router.PathPrefix("/admin").Subrouter()
 	adminR.Use(general.GetIsAdminMiddleware(handler.Logger))
 	adminR.Path("/artist").Methods(http.MethodPost).HandlerFunc(handler.AddArtist)
+	adminR.Path("/song").Methods(http.MethodPost).HandlerFunc(handler.AddSongHandler)
 
 	internalR := router.PathPrefix("/intern").Methods(http.MethodGet).Subrouter()
 	internalR.Use(general.GetInternalRequestMiddleware(handler.Logger))
