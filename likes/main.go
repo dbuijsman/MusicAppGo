@@ -13,7 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-const port string = ":9033"
+const port string = ":9004"
 const servername string = "likes"
 
 func main() {
@@ -44,11 +44,16 @@ func initRoutes(handler *handlers.LikesHandler) *mux.Router {
 	clientR := router.PathPrefix("/api").Subrouter()
 	clientR.Use(general.GetValidateTokenMiddleWare(handler.Logger))
 
+	getR := clientR.Methods(http.MethodGet).Subrouter()
+	getR.Use(general.GetOffsetMaxMiddleware(handler.Logger))
+	getR.PathPrefix("/like").HandlerFunc(handler.GetLikes)
+	getR.PathPrefix("/dislike").HandlerFunc(handler.GetDislikes)
+
 	likesR := clientR.PathPrefix("/like").Subrouter()
 	likesR.Methods(http.MethodPost).HandlerFunc(handler.AddLike)
 	likesR.Methods(http.MethodDelete).HandlerFunc(handler.RemoveLike)
 
-	dislikesR := clientR.PathPrefix("/like").Subrouter()
+	dislikesR := clientR.PathPrefix("/dislike").Subrouter()
 	dislikesR.Methods(http.MethodPost).HandlerFunc(handler.AddDislike)
 	dislikesR.Methods(http.MethodDelete).HandlerFunc(handler.RemoveDislike)
 

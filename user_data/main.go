@@ -16,7 +16,7 @@ import (
 )
 
 // These configurations will be exported to a file
-const port string = ":9111"
+const port string = ":9001"
 const servername string = "users"
 
 func main() {
