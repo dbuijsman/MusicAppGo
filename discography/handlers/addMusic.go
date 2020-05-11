@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// AddArtist will add a new artist to the database
-func (handler *MusicHandler) AddArtist(response http.ResponseWriter, request *http.Request) {
+// AddArtistHandler will add a new artist to the database
+func (handler *MusicHandler) AddArtistHandler(response http.ResponseWriter, request *http.Request) {
 	var newArtist ClientArtist
 	if err := general.ReadFromJSON(&newArtist, request.Body); err != nil {
 		badRequests.Inc()
@@ -18,11 +18,15 @@ func (handler *MusicHandler) AddArtist(response http.ResponseWriter, request *ht
 	artist, prefix := seperatePrefix(newArtist.Artist)
 	handler.Logger.Printf("Received call for adding new artist %v, %v with link %v\n", artist, prefix, newArtist.LinkSpotify)
 	if _, err := handler.AddNewArtist(artist, prefix, newArtist.LinkSpotify); err != nil {
-		if err.(general.DBError).ErrorCode != general.DuplicateEntry {
-			general.SendError(response, http.StatusInternalServerError)
+		if err.(general.DBError).ErrorCode == general.DuplicateEntry {
+			general.SendError(response, http.StatusUnprocessableEntity)
 			return
 		}
-		http.Error(response, "This artist already exists", http.StatusUnprocessableEntity)
+		if err.(general.DBError).ErrorCode == general.DuplicateEntry {
+			http.Error(response, "This artist already exists", http.StatusUnprocessableEntity)
+			return
+		}
+		general.SendError(response, http.StatusInternalServerError)
 		return
 	}
 	succesNewArtist.Inc()
@@ -32,16 +36,20 @@ func (handler *MusicHandler) AddArtist(response http.ResponseWriter, request *ht
 
 // AddNewArtist adds a new artist to the database. It returns an error when
 func (handler *MusicHandler) AddNewArtist(artist, prefix, linkSpotify string) (general.Artist, error) {
+	if artist == "" {
+		handler.Logger.Printf("Can't add artist without a name: %v, %v\n", artist, prefix)
+		return general.Artist{}, general.GetDBError("Missing artist", general.InvalidInput)
+	}
 	handler.Logger.Printf("Trying to add %v, %v to DB\n", artist, prefix)
 	newArtist, err := handler.db.AddArtist(artist, prefix, linkSpotify)
 	if err != nil {
-		if err.(general.DBError).ErrorCode != general.DuplicateEntry {
-			failedNewArtist.Inc()
-			handler.Logger.Printf("[ERROR] Failed to add %v, %v due to: %s\n", artist, prefix, err)
-			return general.Artist{}, general.ErrorToUnknownDBError(err)
+		if err.(general.DBError).ErrorCode == general.DuplicateEntry {
+			handler.Logger.Printf("Artist %v, %v already exists\n", artist, prefix)
+			return general.Artist{}, general.GetDBError("This artist is already in the database", general.DuplicateEntry)
 		}
-		handler.Logger.Printf("Artist %v, %v already exists\n", artist, prefix)
-		return general.Artist{}, general.GetDBError("This artist is already in the database", general.DuplicateEntry)
+		failedNewArtist.Inc()
+		handler.Logger.Printf("[ERROR] Failed to add %v, %v due to: %s\n", artist, prefix, err)
+		return general.Artist{}, general.ErrorToUnknownDBError(err)
 	}
 	go func(handler *MusicHandler, newArtist general.Artist) {
 		msg, err := general.ToJSONBytes(newArtist)

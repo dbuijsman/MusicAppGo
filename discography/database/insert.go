@@ -6,6 +6,9 @@ import (
 
 // AddArtist adds a new artist to the database
 func (db *MusicDB) AddArtist(artist, prefix, linkSpotify string) (general.Artist, error) {
+	if len(artist) == 0 {
+		return general.Artist{}, general.GetDBError("Missing name", general.InvalidInput)
+	}
 	resultID, err := db.database.Exec("INSERT INTO artists (name_artist, prefix, linkSpotify) VALUES ( ?, ?,?)", artist, prefix, linkSpotify)
 	if err != nil {
 		return general.Artist{}, general.MySQLErrorToDBError(err)
@@ -19,6 +22,9 @@ func (db *MusicDB) AddArtist(artist, prefix, linkSpotify string) (general.Artist
 
 // AddSong will add a new song to the database. This function won't check if the song already exists. It will return an error if the data is incomplete or if an artist don't exist.
 func (db *MusicDB) AddSong(song string, artists []general.Artist) (general.Song, error) {
+	if len(song) == 0 {
+		return general.Song{}, general.GetDBError("Missing name", general.InvalidInput)
+	}
 	if len(artists) == 0 {
 		return general.Song{}, general.GetDBError("No artists is given for adding a song", general.InvalidInput)
 	}
