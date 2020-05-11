@@ -15,6 +15,7 @@ func (db *MusicDB) GetArtistsStartingWithLetter(startLetter string, offset, max 
 	if err != nil {
 		return nil, general.ErrorToUnknownDBError(err)
 	}
+	defer results.Close()
 	return scanArtists(results)
 }
 
@@ -27,6 +28,7 @@ func (db *MusicDB) GetArtistsStartingWithNumber(offset, max int) ([]general.Arti
 	if err != nil {
 		return nil, general.ErrorToUnknownDBError(err)
 	}
+	defer results.Close()
 	return scanArtists(results)
 
 }
@@ -41,6 +43,7 @@ func (db *MusicDB) GetSongsFromArtist(artist string, offset, max int) ([]general
 	if err != nil {
 		return nil, general.ErrorToUnknownDBError(err)
 	}
+	defer results.Close()
 	return scanSongs(results)
 }
 
@@ -73,12 +76,27 @@ func (db *MusicDB) FindSongByName(artist, song string) (general.Song, error) {
 	return db.FindSongByID(songID)
 }
 
+// FindArtistByID returns the artist that belongs to the given ID
+func (db *MusicDB) FindArtistByID(artistID int) (general.Artist, error) {
+	result := db.database.QueryRow("SELECT id, name_artist, prefix FROM artists WHERE id=? LIMIT 1;", artistID)
+	var artist general.Artist
+	err := result.Scan(&artist.ID, &artist.Name, &artist.Prefix)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return general.Artist{}, general.GetDBError(err.Error(), general.NotFoundError)
+		}
+		return general.Artist{}, general.ErrorToUnknownDBError(err)
+	}
+	return artist, nil
+}
+
 // FindSongByID returns the song that belongs to the given ID
 func (db *MusicDB) FindSongByID(songID int) (general.Song, error) {
 	results, err := db.database.Query("SELECT artists.id, name_artist, prefix, songs.id, name_song FROM artists, discography, songs WHERE artists.id=artist_id AND songs.id=song_id AND songs.id=?;", songID)
 	if err != nil {
 		return general.Song{}, general.ErrorToUnknownDBError(err)
 	}
+	defer results.Close()
 	songs, scanError := scanSongs(results)
 	if scanError != nil {
 		return general.Song{}, scanError

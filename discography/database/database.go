@@ -12,6 +12,7 @@ type Database interface {
 	GetSongsFromArtist(artist string, offset, max int) ([]general.Song, error)
 	FindArtistByName(name string) (general.Artist, error)
 	FindSongByName(artist, song string) (general.Song, error)
+	FindArtistByID(artistID int) (general.Artist, error)
 	FindSongByID(songID int) (general.Song, error)
 	AddArtist(artist, prefix, linkSpotify string) (general.Artist, error)
 	AddSong(song string, artists []general.Artist) (general.Song, error)
