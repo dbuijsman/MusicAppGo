@@ -28,6 +28,12 @@ func ReadFromJSON(i interface{}, r io.Reader) error {
 	return Validate(i)
 }
 
+// ReadFromJSONNoValidation does the same as ReadFromJSON but without validating the struct
+func ReadFromJSONNoValidation(i interface{}, r io.Reader) error {
+	d := json.NewDecoder(r)
+	return d.Decode(i)
+}
+
 // FromJSONBytes deserializes the object from a JSON byte slice to the given interface
 func FromJSONBytes(i interface{}, bytes []byte) error {
 	err := json.Unmarshal(bytes, i)

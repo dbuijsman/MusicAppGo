@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"fmt"
 	"general"
 	"net/http"
@@ -77,10 +76,7 @@ func (handler *MusicHandler) SongsFromArtist(response http.ResponseWriter, reque
 			handler.Logger.Printf("Failed to obtain preferences of user #%v for artist %v due to: %s\n", userID, nameArtist, err)
 			return
 		}
-		buf := new(bytes.Buffer)
-		buf.ReadFrom(resp.Body)
-		err = general.FromJSONBytes(preferences, buf.Bytes())
-		if err != nil {
+		if err = general.ReadFromJSONNoValidation(&preferences, resp.Body); err != nil {
 			handler.Logger.Printf("[ERROR] Failed to deserialze map of songsID and preferences due to: %s\n", err)
 		}
 		handler.Logger.Printf("Received response for user #%v for artist %v: %v\n", userID, nameArtist, resp.StatusCode)
