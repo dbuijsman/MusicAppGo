@@ -1,14 +1,41 @@
 package handlers
 
 import (
+	"errors"
 	"general"
 	"log"
 	"net/http"
 	"user_data/database"
 
+	"github.com/gorilla/mux"
+	"github.com/optiopay/kafka/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
+
+const servername string = "users"
+
+// NewUserServer returns a new server for userdata and a function that starts up the server
+func NewUserServer(handler *UserHandler, broker *kafka.Broker, servername, port string) (server *http.Server, start func()) {
+	server, _, start = general.NewServer(servername, port, initRoutes(handler), broker, nil, handler.Logger)
+	return
+}
+
+// initRoutes will returns a router with the necessary routes registered to it.
+func initRoutes(users *UserHandler) *mux.Router {
+	router := mux.NewRouter()
+	router.Handle("/metrics", promhttp.Handler())
+
+	postRouter := router.Methods(http.MethodPost).Subrouter()
+	postRouter.HandleFunc("/signup", users.SignUp)
+	postRouter.HandleFunc("/login", users.Login)
+
+	validateRouter := router.PathPrefix("/validate").Subrouter()
+	validateRouter.HandleFunc("/", users.GetRole)
+	validateRouter.Use(general.GetValidateTokenMiddleWare(users.Logger))
+	return router
+}
 
 // UserHandler consists of a logger and a database
 type UserHandler struct {
@@ -17,15 +44,18 @@ type UserHandler struct {
 	SendMessage func(string, []byte)
 }
 
-//NewUserHandler returns a UserHandler
-func NewUserHandler(l *log.Logger, db database.Database, sendMessage func(string, []byte) error) *UserHandler {
-	return &UserHandler{Logger: l, db: db, SendMessage: func(topic string, message []byte) {
+//NewUserHandler returns a UserHandler. It returns an error if sendMessage is nil.
+func NewUserHandler(logger *log.Logger, db database.Database, sendMessage func(string, []byte) error) (*UserHandler, error) {
+	if sendMessage == nil {
+		return nil, errors.New("sendMessage can't be nil")
+	}
+	return &UserHandler{Logger: logger, db: db, SendMessage: func(topic string, message []byte) {
 		if err := sendMessage(topic, message); err != nil {
-			l.Printf("Topic %v: Can't send message %s: %v\n", topic, message, err)
+			logger.Printf("Topic %v: Can't send message %s: %v\n", topic, message, err)
 			return
 		}
-		l.Printf("Topic %v: Send message: %s\n", topic, message)
-	}}
+		logger.Printf("Topic %v: Send message: %s\n", topic, message)
+	}}, nil
 }
 
 // ClientCredentials contains the credentials that were send from the client

@@ -26,14 +26,10 @@ func main() {
 	defer db.Close()
 	broker, closeBroker := general.ConnectToKafka(logger, servername)
 	defer closeBroker()
-	GETRequest, err := general.DefealtGETRequest(servername)
-	if err != nil {
-		logger.Fatalf("Can't create a client for sending get requests: %s\n", err)
-	}
 	logger.Printf("Handler is ready for sending get requests")
-	handler := handlers.NewLikesHandler(logger, database.NewLikesDB(db), GETRequest)
-	go handler.StartConsuming(broker)
-	general.StartServer(servername, port, initRoutes(handler), logger)
+	handler := handlers.NewLikesHandler(logger, database.NewLikesDB(db), nil)
+	_, startServer := handlers.NewLikesServer(handler, broker, servername, port)
+	startServer()
 }
 
 // initRoutes returns a router which can handle all the requests for this microservice
