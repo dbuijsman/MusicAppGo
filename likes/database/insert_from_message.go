@@ -1,6 +1,8 @@
 package database
 
-import "general"
+import (
+	"general"
+)
 
 // AddUser adds a new user to the database
 func (db *LikesDB) AddUser(user general.Credentials) error {

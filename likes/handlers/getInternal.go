@@ -49,10 +49,9 @@ LOOP:
 		general.SendError(response, http.StatusNotFound)
 		return
 	}
-	response.Header().Set("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)
-	err = general.WriteToJSON(&results, response)
-	if err != nil {
+	response.Header().Set("Content-Type", "application/json")
+	if err = general.WriteToJSON(&results, response); err != nil {
 		handler.Logger.Printf("[ERROR] %s\n", err)
 	}
 }

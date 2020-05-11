@@ -12,10 +12,11 @@ func (db *LikesDB) GetLikes(userID, offset, max int) ([]general.Song, error) {
 		return nil, general.GetDBError("Can not search with negative offset or non-positive max", general.InvalidOffsetMax)
 	}
 	// This query is a cross join between artists, discography and a subquery that selects the likes from an user
-	results, err := db.database.Query("SELECT artists.id, name_artist, prefix, discography.song_id, name_song FROM artists, discography CROSS JOIN (SELECT DISTINCT liked_songs.song_id, name_song FROM liked_songs, songs WHERE user_id=? AND liked_songs.song_id=songs.id ORDER BY name_song LIMIT ?,?) AS likes ON discography.song_id=likes.song_id WHERE artists.id=artist_id ORDER BY name_artist, name_song;", userID, offset, max)
+	results, err := db.database.Query("SELECT artists.id, name_artist, prefix, discography.song_id, name_song FROM artists, discography CROSS JOIN (SELECT liked_songs.song_id, name_song FROM liked_songs, songs, discography, artists WHERE user_id=? AND liked_songs.song_id=songs.id AND songs.id=discography.song_id AND discography.artist_id=artists.id GROUP BY liked_songs.song_id ORDER BY min(name_artist),min(name_song) LIMIT ?,?) AS likes ON discography.song_id=likes.song_id WHERE artists.id=artist_id ORDER BY name_song;", userID, offset, max)
 	if err != nil {
 		return nil, general.ErrorToUnknownDBError(err)
 	}
+	defer results.Close()
 	return scanSongs(results, "like")
 }
 
@@ -25,10 +26,11 @@ func (db *LikesDB) GetDislikes(userID, offset, max int) ([]general.Song, error) 
 		return nil, general.GetDBError("Can not search with negative offset or non-positive max", general.InvalidOffsetMax)
 	}
 	// This query is a cross join between artists, discography and a subquery that selects the dislikes from an user
-	results, err := db.database.Query("SELECT artists.id, name_artist, prefix, discography.song_id, name_song FROM artists, discography CROSS JOIN (SELECT DISTINCT disliked_songs.song_id, name_song FROM disliked_songs, songs WHERE user_id=? AND disliked_songs.song_id=songs.id ORDER BY name_song LIMIT ?,?) AS dislikes ON discography.song_id=dislikes.song_id WHERE artists.id=artist_id ORDER BY name_artist, name_song;", userID, offset, max)
+	results, err := db.database.Query("SELECT artists.id, name_artist, prefix, discography.song_id, name_song FROM artists, discography CROSS JOIN (SELECT disliked_songs.song_id, name_song FROM disliked_songs, songs, discography, artists WHERE user_id=? AND disliked_songs.song_id=songs.id AND songs.id=discography.song_id AND discography.artist_id=artists.id GROUP BY disliked_songs.song_id ORDER BY min(name_artist),min(name_song) LIMIT ?,?) AS dislikes ON discography.song_id=dislikes.song_id WHERE artists.id=artist_id ORDER BY name_song;", userID, offset, max)
 	if err != nil {
 		return nil, general.ErrorToUnknownDBError(err)
 	}
+	defer results.Close()
 	return scanSongs(results, "dislike")
 }
 
@@ -41,6 +43,7 @@ func (db *LikesDB) GetLikesIDFromArtistName(logger *log.Logger, userID int, name
 		logger.Printf("[ERROR] Can't search db for likes of user #%v for artist %v due to: %v\n", userID, nameArtist, err)
 		return
 	}
+	defer results.Close()
 	var songID int
 	for results.Next() {
 		err = results.Scan(&songID)
@@ -62,6 +65,7 @@ func (db *LikesDB) GetDislikesIDFromArtistName(logger *log.Logger, userID int, n
 		logger.Printf("[ERROR] Can't search db for dislikes of user #%v for artist %v due to: %v\n", userID, nameArtist, err)
 		return
 	}
+	defer results.Close()
 	var songID int
 	for results.Next() {
 		err = results.Scan(&songID)
