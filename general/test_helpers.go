@@ -14,6 +14,58 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// TestWriter is an empty struct that can be used as an empty io.writer
+type TestWriter struct{}
+
+func (fake TestWriter) Write(p []byte) (n int, err error) {
+	n = len(p)
+	err = nil
+	return
+}
+
+// TestEmptyLogger return an empty logger
+func TestEmptyLogger() *log.Logger {
+	return log.New(TestWriter{}, "TEST", log.LstdFlags|log.Lshortfile)
+}
+
+// TestRequest sends a request to the server and returns the response. If token is not a default string, then it will add the token to the request
+func TestRequest(t *testing.T, server *http.Server, method, path, token string, body interface{}) *httptest.ResponseRecorder {
+	bodyRequest, writer := io.Pipe()
+	go func() {
+		err := WriteToJSON(body, writer)
+		if err != nil {
+			t.Fatalf("Error in test helper: %s", err)
+		}
+		writer.Close()
+	}()
+	request := httptest.NewRequest(method, "http://localhost"+path, bodyRequest)
+	if token != "" {
+		request.Header.Add("Token", token)
+	}
+	recorder := httptest.NewRecorder()
+	server.Handler.ServeHTTP(recorder, request)
+	return recorder
+}
+
+// Message is the type for testing messages to kafka
+type Message struct {
+	Topic   string
+	Message []byte
+}
+
+// TestSendMessage returns a function that can be used for sending messages and a channel through which the message can be received
+func TestSendMessage() (sendMessage func(string, []byte) error, channelReceiving chan Message) {
+	channel := make(chan Message)
+	sendMessage = func(topic string, message []byte) error {
+		channel <- Message{Topic: topic, Message: message}
+		return nil
+	}
+	channelReceiving = channel
+	return
+}
+
+// THE REST IS OBSOLETE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 // TestSendMessageEmpty returns a SendMessageFunction for a handler that just returns nil
 func TestSendMessageEmpty() func(topic string, message []byte) error {
 	return func(topic string, message []byte) error {
@@ -21,8 +73,8 @@ func TestSendMessageEmpty() func(topic string, message []byte) error {
 	}
 }
 
-// TestSendMessage returns a SendMessageFunction for a handler and two pointer to the topic and the message of the last message
-func TestSendMessage(wg *sync.WaitGroup) (*string, *string, func(topic string, message []byte)) {
+// TestSendMessageWG returns a SendMessageFunction for a handler and two pointer to the topic and the message of the last message
+func TestSendMessageWG(wg *sync.WaitGroup) (*string, *string, func(topic string, message []byte)) {
 	topicValue, msgValue := "", ""
 	top, msg := &topicValue, &msgValue
 	return top, msg, func(topic string, message []byte) {
@@ -148,18 +200,4 @@ func WithCredentials(request *http.Request, creds Credentials) *http.Request {
 func WithOffsetMax(request *http.Request, offset, max int) *http.Request {
 	ctx := context.WithValue(request.Context(), OffsetMax{}, OffsetMax{Offset: offset, Max: max})
 	return request.WithContext(ctx)
-}
-
-// TestWriter is an empty struct that can be used as an empty io.writer
-type TestWriter struct{}
-
-func (fake TestWriter) Write(p []byte) (n int, err error) {
-	n = len(p)
-	err = nil
-	return
-}
-
-// TestEmptyLogger return an empty logger
-func TestEmptyLogger() *log.Logger {
-	return log.New(TestWriter{}, "TEST", log.LstdFlags|log.Lshortfile)
 }

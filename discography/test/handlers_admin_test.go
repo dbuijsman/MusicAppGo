@@ -4,211 +4,340 @@ import (
 	"discography/handlers"
 	"general"
 	"net/http"
-	"sync"
 	"testing"
+	"time"
 )
 
-func TestAddArtist_savingInDB(t *testing.T) {
+func TestAdminHandlers_response(t *testing.T) {
+	artist := general.NewArtist(1, "Prodigy", "The")
+	song := "Firestarter"
+	linkArtist := "linkToArtist"
 	cases := map[string]struct {
-		nameArtist                   string
+		path               string
+		roleClient         string
+		body               interface{}
+		expectedStatusCode int
+	}{
+		"AddArtist: Request without body":                     {"/admin/artist", "admin", nil, http.StatusBadRequest},
+		"AddArtist: Artist with a prefix":                     {"/admin/artist", "admin", handlers.NewClientArtist("The Rolling Stones", "link"), http.StatusOK},
+		"AddArtist: Artist with no prefix":                    {"/admin/artist", "admin", handlers.NewClientArtist("Sum 41", "link"), http.StatusOK},
+		"AddArtist: Artist starting with A (no prefix)":       {"/admin/artist", "admin", handlers.NewClientArtist("Avenged Sevenfold", "link"), http.StatusOK},
+		"AddArtist: Empty artist name":                        {"/admin/artist", "admin", handlers.NewClientArtist("", "link"), http.StatusBadRequest},
+		"AddArtist: No Spotify link":                          {"/admin/artist", "admin", handlers.NewClientArtist("Blur", ""), http.StatusBadRequest},
+		"AddArtist: Non-admin":                                {"/admin/artist", "user", handlers.NewClientArtist("Blur", "link"), http.StatusUnauthorized},
+		"AddArtist: Duplicate entry":                          {"/admin/artist", "admin", handlers.NewClientArtist(artist.Prefix+" "+artist.Name, linkArtist), http.StatusUnprocessableEntity},
+		"AddArtist: Duplicate artist with different link":     {"/admin/artist", "admin", handlers.NewClientArtist(artist.Prefix+" "+artist.Name, "link"), http.StatusUnprocessableEntity},
+		"AddArtist: Artist with same name but without prefix": {"/admin/artist", "admin", handlers.NewClientArtist(artist.Name, linkArtist), http.StatusUnprocessableEntity},
+		"AddSong: Request without body":                       {"/admin/song", "admin", nil, http.StatusBadRequest},
+		"AddSong: Existing artist with new song":              {"/admin/song", "admin", handlers.NewClientSong("No Good", artist.Name), http.StatusOK},
+		"AddSong: New artist with new song":                   {"/admin/song", "admin", handlers.NewClientSong("Reason to Believe", "Sum 41"), http.StatusOK},
+		"AddSong: Same song from other artist":                {"/admin/song", "admin", handlers.NewClientSong(song, "KDrew"), http.StatusOK},
+		"AddSong: Collaboration of 2 new artists":             {"/admin/song", "admin", handlers.NewClientSong("Crazy", "Lost Frequencies", "Zonderling"), http.StatusOK},
+		"AddSong: Collaboration of existing and new artist":   {"/admin/song", "admin", handlers.NewClientSong("Get Money", "Boogz Boogetz", artist.Name), http.StatusOK},
+		"AddSong: Song without a name":                        {"/admin/song", "admin", handlers.NewClientSong("", "The Prodigy"), http.StatusBadRequest},
+		"AddSong: Song without an artist":                     {"/admin/song", "admin", handlers.NewClientSong("House of the Rising Sun"), http.StatusBadRequest},
+		"AddSong: Non-admin":                                  {"/admin/song", "user", handlers.NewClientSong("House of the Rising Sun", "The Animals"), http.StatusUnauthorized},
+		"AddSong: Duplicate entry":                            {"/admin/song", "admin", handlers.NewClientSong(song, artist.Name), http.StatusUnprocessableEntity},
+	}
+	for name, test := range cases {
+		db := newTestDB()
+		if _, err := db.AddArtist(artist.Name, artist.Prefix, linkArtist); err != nil {
+			t.Fatalf("%v: Failed to add artist for test TestAdminHandlers_response due to: %s\n", name, err)
+			continue
+		}
+		if _, err := db.AddSong(song, []general.Artist{artist}); err != nil {
+			t.Fatalf("%v: Failed to add song for test TestAdminHandlers_response due to: %s\n", name, err)
+			continue
+		}
+		server, _ := testServerNoRequest(t, db)
+		token, err := general.CreateToken(1, "test", test.roleClient)
+		if err != nil {
+			t.Errorf("Can't start TestAdminHandlers_response due to failure making token:%s\n", err)
+			continue
+		}
+		response := general.TestRequest(t, server, http.MethodPost, test.path, token, test.body)
+		if response.Code != test.expectedStatusCode {
+			t.Errorf("%v: Expects statuscode: %v but got: %v\n", name, test.expectedStatusCode, response.Code)
+		}
+	}
+}
+
+func TestAddArtistHandler_savingInDB(t *testing.T) {
+	cases := map[string]struct {
+		artist                       string
+		expectedSavedInDB            bool
 		expectedPrefix, expectedName string
 	}{
-		"Artist with a prefix":                                   {"The Rolling Stones", "The", "Rolling Stones"},
-		"Artist with no prefix":                                  {"Sum 41", "", "Sum 41"},
-		"Artist without prefix but the name starts with one (A)": {"Avenged Sevenfold", "", "Avenged Sevenfold"},
+		"Artist with a prefix":                                   {"The Rolling Stones", true, "The", "Rolling Stones"},
+		"Artist with no prefix":                                  {"Sum 41", true, "", "Sum 41"},
+		"Artist without prefix but the name starts with one (A)": {"Avenged Sevenfold", true, "", "Avenged Sevenfold"},
+		"Empty artist name":                                      {"", false, "", ""},
 	}
-	for nameCase, newArtist := range cases {
+	token, err := general.CreateToken(1, "test", "admin")
+	if err != nil {
+		t.Fatalf("Can't start TestAddArtistHandler_savingInDB due to:%s\n", err)
+	}
+	for name, test := range cases {
 		db := newTestDB()
-		handler := handlers.NewMusicHandler(general.TestEmptyLogger(), db, general.TestSendMessageEmpty(), nil)
-		general.TestPostRequest(t, handler.AddArtist, handlers.NewClientArtist(newArtist.nameArtist, ""))
-		result := db.artistsDB[newArtist.expectedName]
-		if result.name != newArtist.expectedName {
-			t.Errorf("Admin adding new artist: %v expects name: %v but got: %v\n", newArtist.nameArtist, newArtist.expectedName, result.name)
+		server, _ := testServerNoRequest(t, db)
+		general.TestRequest(t, server, http.MethodPost, "/admin/artist", token, handlers.NewClientArtist(test.artist, "link"))
+		result, ok := db.artistsDB[test.expectedName]
+		if ok != test.expectedSavedInDB {
+			t.Errorf("%v: Expects to be saved in db: %v but got: %v\n", name, test.expectedSavedInDB, ok)
+			continue
 		}
-		if result.prefix != newArtist.expectedPrefix {
-			t.Errorf("%v: Admin adding new artist: %v expects prefix: %v but got: %v\n", nameCase, newArtist.nameArtist, newArtist.expectedPrefix, result.prefix)
+		if result.name != test.expectedName {
+			t.Errorf("%v: AddArtist %v expects name: %v but got: %v\n", name, test.artist, test.expectedName, result.name)
 		}
-	}
-}
-
-func TestAddArtist_statusCode(t *testing.T) {
-	cases := map[string]struct {
-		nameArtist         string
-		expectedStatusCode int
-	}{
-		"Artist with a prefix":                                   {"The Rolling Stones", http.StatusOK},
-		"Artist with no prefix":                                  {"Sum 41", http.StatusOK},
-		"Artist without prefix but the name starts with one (A)": {"Avenged Sevenfold", http.StatusOK},
-		"Empty artist name":                                      {"", http.StatusBadRequest},
-	}
-	for nameCase, newArtist := range cases {
-		handler := testMusicHandler()
-		response := general.TestPostRequest(t, handler.AddArtist, handlers.NewClientArtist(newArtist.nameArtist, ""))
-		if response.Code != newArtist.expectedStatusCode {
-			t.Errorf("%v: Admin adding new artist: %v expects statuscode: %v but got: %v\n", nameCase, newArtist.nameArtist, newArtist.expectedStatusCode, response.Code)
+		if result.prefix != test.expectedPrefix {
+			t.Errorf("%v: AddArtist %v expects prefix: %v but got: %v\n", name, test.artist, test.expectedPrefix, result.prefix)
 		}
 	}
 }
 
-func TestAddArtist_duplicateEntry(t *testing.T) {
-	someArtist := handlers.NewClientArtist("Test Artist", "Link test")
-	cases := map[string]struct {
-		name, link         string
-		expectedStatusCode int
-	}{
-		"Duplicate input":  {someArtist.Artist, someArtist.LinkSpotify, http.StatusUnprocessableEntity},
-		"Different input ": {someArtist.Artist + "NOT", someArtist.LinkSpotify + "NOT", http.StatusOK},
-		"Duplicate name":   {someArtist.Artist, someArtist.LinkSpotify + "NOT", http.StatusUnprocessableEntity},
-	}
-	for nameCase, newArtist := range cases {
-		handler := testMusicHandler()
-		general.TestPostRequest(t, handler.AddArtist, someArtist)
-		recorder := general.TestPostRequest(t, handler.AddArtist, handlers.NewClientArtist(newArtist.name, newArtist.link))
-		if recorder.Code != newArtist.expectedStatusCode {
-			t.Errorf("%v: Admin adding new artist: %v and link: %v after base case expects statuscode: %v but got: %v\n", nameCase, newArtist.name, newArtist.link, newArtist.expectedStatusCode, recorder.Code)
-		}
-	}
-}
-
-func TestAddArtist_sendNoMessageWhenRequestFails(t *testing.T) {
-	handler := testMusicHandler()
-	handler.SendMessage = func(topic string, message []byte) {
-		t.Errorf("Adding no new artist expects no new message, but it sends %s to topic %v\n", message, topic)
-	}
-	general.TestPostRequest(t, handler.AddArtist, handlers.NewClientArtist("", ""))
-}
-
-func TestAddArtist_sendMessage(t *testing.T) {
-	cases := map[string]struct {
-		artist                               string
-		expectedTopic, expectedArtistMessage string
-	}{
-		"Adding a new artist":             {"Pendulum", "newArtist", "Pendulum"},
-		"Adding a new artist with prefix": {"The Offspring", "newArtist", "Offspring"},
-	}
-	for nameCase, testCase := range cases {
-		artist := handlers.NewClientArtist(testCase.artist, "")
-		handler := testMusicHandler()
-		var wg sync.WaitGroup
-		top, msg, sendMessage := general.TestSendMessage(&wg)
-		wg.Add(1)
-		handler.SendMessage = sendMessage
-		general.TestPostRequest(t, handler.AddArtist, artist)
-		wg.Wait()
-		var result general.Artist
-		err := general.FromJSONBytes(&result, []byte(*msg))
-		if err != nil {
-			t.Errorf("%v: Expects to send a message containing an artist but deserializing results in: %v\n", nameCase, err)
-		}
-		if *top != testCase.expectedTopic {
-			t.Errorf("%v: Expects to send a message to topic %v but instead it was send to %v\n", nameCase, testCase.expectedTopic, *top)
-		}
-		if result.Name != testCase.expectedArtistMessage {
-			t.Errorf("%v: Expects to send artist %v as message but instead it sends: %v\n", nameCase, testCase.expectedArtistMessage, result.Name)
-		}
-	}
-}
-
-func TestAddSong_savingInDB(t *testing.T) {
-	cases := map[string]struct {
-		existingArtists []string
-		artistsNewSong  []string
-		song            string
-		expectedArtist  string
-		expected        bool
-	}{
-		"New artist":          {nil, []string{"Sum 41"}, "Fatlip", "Sum 41", true},
-		"Existing artist":     {[]string{"Sum 41"}, []string{"Sum 41"}, "Still Waiting", "Sum 41", true},
-		"Song without artist": {[]string{"Sum 41"}, nil, "Still Waiting", "Sum 41", false},
-		"Song of existing artist without name of the song":             {[]string{"Sum 41"}, []string{"Sum 41"}, "", "Sum 41", false},
-		"Song of a new artist without the name of the song":            {nil, []string{"Sum 41"}, "", "Sum 41", false},
-		"Song with multiple artists gets added to collabaring artists": {nil, []string{"Iggy Pop", "Sum 41"}, "Little Know It All", "Sum 41", true},
-		"Song with multiple artists gets added to main artist":         {nil, []string{"Iggy Pop", "Sum 41"}, "Little Know It All", "Iggy Pop", true},
-		"New song gets only added to collaborating artists":            {[]string{"The Rolling Stones", "Billy Talent"}, []string{"The Rolling Stones"}, "Sympathy for the Devil", "Billy Talent", false},
-	}
-	for nameCase, newSong := range cases {
-		db := newTestDB()
-		handler := handlers.NewMusicHandler(general.TestEmptyLogger(), db, general.TestSendMessageEmpty(), nil)
-		for _, artist := range newSong.existingArtists {
-			general.TestPostRequest(t, handler.AddArtist, handlers.NewClientArtist(artist, ""))
-		}
-		handler.AddSong(newSong.song, newSong.artistsNewSong...)
-		discography := db.songsDB[newSong.expectedArtist]
-		if _, okSong := discography[newSong.song]; okSong != newSong.expected {
-			t.Errorf("%v: Adding new song expected to be saved in DB: %v but got %v\n", nameCase, newSong.expected, okSong)
-		}
-	}
-}
-
-func TestAddSong_duplicateInput(t *testing.T) {
-	someSong := struct{ artist, song string }{"Billy Talent", "Fallen Leaves"}
+func TestAddSongHandler_savingInDB(t *testing.T) {
 	cases := map[string]struct {
 		artists           []string
 		song              string
-		expectedErrorCode int
+		artistToCheck     string
+		expectedSavedInDB bool
 	}{
-		"Duplicate input":                                      {[]string{someSong.artist}, someSong.song, general.DuplicateEntry},
-		"New song for existing artist":                         {[]string{someSong.artist}, someSong.song + "NOT", 0},
-		"New song for different artist but with the same name": {[]string{someSong.artist + "NOT"}, someSong.song, 0},
+		"Song with 1 artist":         {[]string{"Sum 41"}, "Reason to Believe", "Sum 41", true},
+		"Song with multiple artists": {[]string{"Iggy Pop", "Sum 41"}, "Little Know It All", "Sum 41", true},
+		"Song with no artist":        {[]string{""}, "No Good", "", false},
+		"Song with no name":          {[]string{"Pendulum"}, "", "Pendulum", false},
 	}
-	for nameCase, newSong := range cases {
-		handler := testMusicHandler()
-		handler.AddSong(someSong.song, someSong.artist)
-		_, err := handler.AddSong(newSong.song, newSong.artists...)
-		if newSong.expectedErrorCode == 0 {
-			if err != nil {
-				t.Errorf("%v: No errorcode but got %v\n", nameCase, err.(general.DBError).ErrorCode)
+	token, err := general.CreateToken(1, "test", "admin")
+	if err != nil {
+		t.Fatalf("Can't start TestAddSongHandler_savingInDB due to:%s\n", err)
+	}
+	for name, test := range cases {
+		db := newTestDB()
+		server, _ := testServerNoRequest(t, db)
+		general.TestRequest(t, server, http.MethodPost, "/admin/song", token, handlers.NewClientSong(test.song, test.artists...))
+		song, ok := db.songsDB[test.artistToCheck][test.song]
+		if ok != test.expectedSavedInDB {
+			t.Errorf("%v: Expects to be saved in db: %v but got: %v\n", name, test.expectedSavedInDB, ok)
+			continue
+		}
+		if ok {
+			if song.Name != test.song {
+				t.Errorf("%v: AddSong expects name: %v but got: %v\n", name, test.song, song.Name)
 			}
-			continue
-		}
-		if err == nil {
-			t.Errorf("%v: Expected errorcode %v but got no error\n", nameCase, newSong.expectedErrorCode)
-			continue
-		}
-		if errorcode := err.(general.DBError).ErrorCode; errorcode != newSong.expectedErrorCode {
-			t.Errorf("%v: Expected errorcode: %v but got: %v\n", nameCase, newSong.expectedErrorCode, errorcode)
+			if len(song.Artists) != len(test.artists) {
+				t.Errorf("%v: AddSong expects %v artists but got: %v\n", name, len(test.artists), len(song.Artists))
+			}
 		}
 	}
 }
 
-func TestAddSong_sendMessageNewSong(t *testing.T) {
-	artist := "Pendulum"
-	newSong := "Slam"
-	topic := "newSong"
-	handler := testMusicHandler()
-	var wg sync.WaitGroup
-	msg, sendMessage := general.TestSendMessageToParticularTopic(&wg, topic)
-	handler.SendMessage = sendMessage
-	wg.Add(1)
-	handler.AddSong(newSong, artist)
-	wg.Wait()
-	var result general.Song
-	err := general.FromJSONBytes(&result, []byte(*msg))
-	if err != nil {
-		t.Errorf("Adding new song: Expects to send a message containing an artist but deserializing results in: %v\n", err)
+func TestAddArtist(t *testing.T) {
+	artist := general.NewArtist(1, "Prodigy", "The")
+	cases := map[string]struct {
+		artist, prefix, link string
+		expectedError        error
+		expectedFoundInDB    bool
+	}{
+		"Artist with prefix":    {"Day to Remember", "A", "link", nil, true},
+		"Artist without name":   {"", "A", "link", general.GetDBError("Missing name", general.InvalidInput), false},
+		"Artist without prefix": {"Eminem", "", "link", nil, true},
+		"Artist without link":   {"Metallica", "", "", nil, true},
+		"Duplicate entry":       {"Prodigy", "The", "link", general.GetDBError("Duplicate entry", general.DuplicateEntry), true},
 	}
-	if result.Name != newSong {
-		t.Errorf("Adding new song: Expects to send artist %v as message but instead it sends: %v\n", newSong, result.Name)
+	for name, test := range cases {
+		db := newTestDB()
+		if _, err := db.AddArtist(artist.Name, artist.Prefix, "link"); err != nil {
+			t.Errorf("%v: Failed to set up test due to: %s\n", name, err)
+			continue
+		}
+		handler, _ := testMusicHandlerNoRequest(t, db)
+		_, err := handler.AddNewArtist(test.artist, test.prefix, test.link)
+		if err == nil && test.expectedError != nil {
+			t.Errorf("%v: Expects error with code %v but got no error\n", name, test.expectedError.(general.DBError).ErrorCode)
+		}
+		if err != nil && test.expectedError == nil {
+			t.Errorf("%v: Expects no error but got error with code %v\n", name, err.(general.DBError).ErrorCode)
+		}
+		if err != nil && test.expectedError != nil && err.(general.DBError).ErrorCode != test.expectedError.(general.DBError).ErrorCode {
+			t.Errorf("%v: Expects error with code %v but got error with code %v\n", name, test.expectedError.(general.DBError).ErrorCode, err.(general.DBError).ErrorCode)
+		}
+		if _, ok := db.artistsDB[test.artist]; ok != test.expectedFoundInDB {
+			t.Errorf("%v: Expects to found artist in db is %v but got: %v\n", name, test.expectedFoundInDB, ok)
+		}
 	}
 }
 
-func TestAddSong_sendMessageNewArtist(t *testing.T) {
-	newArtist := "Pendulum"
-	song := "Slam"
+func TestAddArtist_sendMessage(t *testing.T) {
+	artist := general.NewArtist(1, "Prodigy", "The")
+	linkArtist := "linkToArtist"
 	topic := "newArtist"
-	handler := testMusicHandler()
-	var wg sync.WaitGroup
-	msg, sendMessage := general.TestSendMessageToParticularTopic(&wg, topic)
-	handler.SendMessage = sendMessage
-	wg.Add(1)
-	handler.AddSong(song, newArtist)
-	wg.Wait()
-	var result general.Artist
-	err := general.FromJSONBytes(&result, []byte(*msg))
-	if err != nil {
-		t.Errorf("Adding new song: Expects to send a message containing an artist but deserializing results in: %v\n", err)
+	cases := map[string]struct {
+		artist, prefix, link string
+		expectedFoundTopic   bool
+	}{
+		"Artist with prefix":    {"Day to Remember", "A", "link", true},
+		"Artist without name":   {"", "A", "link", false},
+		"Artist without prefix": {"Eminem", "", "link", true},
+		"Artist without link":   {"Metallica", "", "", true},
+		"Duplicate entry":       {"Prodigy", "The", "link", false},
 	}
-	if result.Name != newArtist {
-		t.Errorf("Adding new song: Expects to send artist %v as message but instead it sends: %v\n", newArtist, result.Name)
+	for name, test := range cases {
+		db := newTestDB()
+		if _, err := db.AddArtist(artist.Name, artist.Prefix, linkArtist); err != nil {
+			t.Errorf("%v: Failed to run test due to failing adding existing artist: %s\n", name, err)
+			continue
+		}
+		handler, channel := testMusicHandlerNoRequest(t, db)
+		handler.AddNewArtist(test.artist, test.prefix, test.link)
+		go func() {
+			time.Sleep(time.Millisecond)
+			close(channel)
+		}()
+		foundTopic := false
+		for message := range channel {
+			if message.Topic != topic {
+				t.Errorf("%v: Expects no other topic than %v but got topic: %v\n", name, topic, message.Topic)
+				continue
+			}
+			foundTopic = true
+			var result general.Artist
+			if err := general.FromJSONBytes(&result, []byte(message.Message)); err != nil {
+				t.Errorf("%v: Expects to send a message containing an artist but deserializing results in: %v\n", name, err)
+				continue
+			}
+			if result.ID == 0 {
+				t.Errorf("%v: Expects message with id but got id=0\n", name)
+			}
+			if result.Name != test.artist {
+				t.Errorf("%v: Expects message with artist %v but got: %v\n", name, test.artist, result.Name)
+			}
+			if result.Prefix != test.prefix {
+				t.Errorf("%v: Expects message with prefix %v but got: %v\n", name, test.prefix, result.Prefix)
+			}
+		}
+		if foundTopic != test.expectedFoundTopic {
+			t.Errorf("%v: Expects to found topic %v but got: %v\n", name, test.expectedFoundTopic, foundTopic)
+		}
+	}
+}
+
+func TestAddSong(t *testing.T) {
+	artist := general.NewArtist(1, "Prodigy", "The")
+	song := "No Good"
+	cases := map[string]struct {
+		artists           []string
+		song              string
+		artistToCheck     string
+		expectedError     error
+		expectedFoundInDB bool
+	}{
+		"New artist with new song":                                       {[]string{"Sum 41"}, "Fatlip", "Sum 41", nil, true},
+		"Existing artist with new song":                                  {[]string{artist.Name}, "Warriors Dance", artist.Name, nil, true},
+		"Other artist with same song name":                               {[]string{"Kaleo"}, song, "Kaleo", nil, true},
+		"Collaboration of two new artists added to main artist":          {[]string{"Lost Frequencies", "Zonderling"}, "Crazy", "Lost Frequencies", nil, true},
+		"Collaboration of two new artists added to collaborating artist": {[]string{"Lost Frequencies", "Zonderling"}, "Crazy", "Zonderling", nil, true},
+		"Collaboration of existing and new artist":                       {[]string{artist.Name, "Boogz Boogetz"}, "Get Money", artist.Name, nil, true},
+		"Song without artist":                                            {nil, "Still Waiting", "", general.GetDBError("Missing input", general.InvalidInput), false},
+		"Song of existing artist without name of the song":               {[]string{artist.Name}, "", artist.Name, general.GetDBError("Missing input", general.InvalidInput), false},
+		"Song of a new artist without the name of the song":              {[]string{"Sum 41"}, "", "Sum 41", general.GetDBError("Missing input", general.InvalidInput), false},
+		"Song gets only added to collaborating artists":                  {[]string{"The Roling Stones"}, "Sympathy for the Devil", artist.Name, nil, false},
+		"Duplicate song":                                                 {[]string{artist.Name}, song, artist.Name, general.GetDBError("Duplicate entry", general.DuplicateEntry), true},
+	}
+	for name, test := range cases {
+		db := newTestDB()
+		newArtist, err := db.AddArtist(artist.Name, artist.Prefix, "link")
+		if err != nil {
+			t.Errorf("%v: Failed to set up test with existing artist due to: %s\n", name, err)
+			continue
+		}
+		if _, err = db.AddSong(song, []general.Artist{newArtist}); err != nil {
+			t.Errorf("%v: Failed to set up test with existing song due to: %s\n", name, err)
+			continue
+		}
+		handler, _ := testMusicHandlerNoRequest(t, db)
+		_, err = handler.AddSong(test.song, test.artists...)
+		if err == nil && test.expectedError != nil {
+			t.Errorf("%v: Expects error with code %v but got no error\n", name, test.expectedError.(general.DBError).ErrorCode)
+		}
+		if err != nil && test.expectedError == nil {
+			t.Errorf("%v: Expects no error but got error with code %v\n", name, err.(general.DBError).ErrorCode)
+		}
+		if err != nil && test.expectedError != nil && err.(general.DBError).ErrorCode != test.expectedError.(general.DBError).ErrorCode {
+			t.Errorf("%v: Expects error with code %v but got error with code %v\n", name, test.expectedError.(general.DBError).ErrorCode, err.(general.DBError).ErrorCode)
+		}
+		if _, ok := db.songsDB[test.artistToCheck][test.song]; ok != test.expectedFoundInDB {
+			t.Errorf("%v: Expects to found song in db is %v but got: %v\n", name, test.expectedFoundInDB, ok)
+		}
+	}
+}
+
+func TestAddSong_sendMessage(t *testing.T) {
+	artist := general.NewArtist(1, "Queen", "")
+	song := "Bohemian Rhapsody"
+	topicSong := "newSong"
+	cases := map[string]struct {
+		artists                  []string
+		song                     string
+		topic                    string
+		expectedFoundTopic       bool
+		expectedFoundOtherTopics bool
+	}{
+		"Song from new artist":                                             {[]string{"Blur"}, "Song 2", "newSong", true, true},
+		"Song from new artist also send newArtist message":                 {[]string{"Blur"}, "Song 2", "newArtist", true, true},
+		"Song from existing artist":                                        {[]string{artist.Name}, "Doom and Gloom", "newSong", true, false},
+		"Collaboration of existing and new artist":                         {[]string{artist.Name, "David Bowie"}, "Under Pressure", "newSong", true, true},
+		"Collaboration of existing and new artist sends newArtist message": {[]string{artist.Name, "David Bowie"}, "Under Pressure", "newArtist", true, true},
+		"Song without artist":                                              {nil, "Still Waiting", "newSong", false, false},
+		"Song of existing artist without name of the song":                 {[]string{artist.Name}, "", "newSong", false, false},
+		"Song of a new artist without the name of the song":                {[]string{"Sum 41"}, "", "newSong", false, true},
+		"Duplicate song":                                                   {[]string{artist.Name}, song, "newSong", false, false},
+	}
+	for name, test := range cases {
+		db := newTestDB()
+		newArtist, err := db.AddArtist(artist.Name, artist.Prefix, "link")
+		if err != nil {
+			t.Errorf("%v: Failed to set up test with existing artist due to: %s\n", name, err)
+			continue
+		}
+		if _, err = db.AddSong(song, []general.Artist{newArtist}); err != nil {
+			t.Errorf("%v: Failed to set up test with existing song due to: %s\n", name, err)
+			continue
+		}
+		handler, channel := testMusicHandlerNoRequest(t, db)
+		handler.AddSong(test.song, test.artists...)
+		go func() {
+			time.Sleep(time.Millisecond)
+			close(channel)
+		}()
+		foundTopic := false
+		for message := range channel {
+			if message.Topic != test.topic {
+				if !test.expectedFoundOtherTopics {
+					t.Errorf("%v: Expects no other topic than %v but got topic: %v\n", name, test.topic, message.Topic)
+				}
+				continue
+			}
+			foundTopic = true
+			if message.Topic != topicSong {
+				continue
+			}
+			var result general.Song
+			if err := general.FromJSONBytes(&result, []byte(message.Message)); err != nil {
+				t.Errorf("%v: Expects to send a message containing a song but deserializing results in: %v\n", name, err)
+				continue
+			}
+			if result.ID == 0 {
+				t.Errorf("%v: Expects message with id but got id=0\n", name)
+			}
+			if result.Name != test.song {
+				t.Errorf("%v: Expects message with song %v but got: %v\n", name, test.song, result.Name)
+			}
+			if len(result.Artists) != len(test.artists) {
+				t.Errorf("%v: Expects message with prefix %v but got: %v\n", name, len(test.artists), len(result.Artists))
+			}
+		}
+		if foundTopic != test.expectedFoundTopic {
+			t.Errorf("%v: Expects to found topic %v but got: %v\n", name, test.expectedFoundTopic, foundTopic)
+		}
 	}
 }

@@ -1,16 +1,46 @@
 package test
 
 import (
+	"discography/database"
 	"discography/handlers"
 	"general"
 	"math"
+	"net/http"
 	"sort"
 	"strconv"
+	"testing"
 )
 
-func testMusicHandler() *handlers.MusicHandler {
-	l := general.TestEmptyLogger()
-	return handlers.NewMusicHandler(l, newTestDB(), general.TestSendMessageEmpty(), nil)
+func testServerNoRequest(t *testing.T, db database.Database) (*http.Server, chan general.Message) {
+	handler, channel := testMusicHandlerNoRequest(t, db)
+	server, _ := handlers.NewMusicServer(handler, nil, "music_test", "")
+	return server, channel
+}
+
+func testMusicHandlerNoRequest(t *testing.T, db database.Database) (*handlers.MusicHandler, chan general.Message) {
+	logger := general.TestEmptyLogger()
+	sendMessage, channel := general.TestSendMessage()
+	get := func(url string) (*http.Response, error) {
+		response := http.Response{StatusCode: http.StatusNotImplemented}
+		return &response, nil
+	}
+	handler, err := handlers.NewMusicHandler(logger, db, sendMessage, get)
+	if err != nil {
+		t.Fatalf("Failed to create a testServer due to: %s\n", err)
+	}
+	return handler, channel
+}
+
+func testAddDiscographyToDB(t *testing.T, db database.Database, discography map[string][]handlers.ClientSong) error {
+	handler, _ := testMusicHandlerNoRequest(t, db)
+	for _, discographyArtist := range discography {
+		for _, song := range discographyArtist {
+			if _, err := handler.AddSong(song.Name, song.Artists...); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 type testDB struct {
@@ -104,6 +134,15 @@ func (fake testDB) FindSongByName(artist, song string) (general.Song, error) {
 	return songData, nil
 }
 
+func (fake testDB) FindArtistByID(artistID int) (general.Artist, error) {
+	for _, artist := range fake.artistsDB {
+		if artist.id == artistID {
+			return general.NewArtist(artist.id, artist.name, artist.prefix), nil
+		}
+	}
+	return general.Artist{}, general.GetDBError("Not found", general.NotFoundError)
+}
+
 func (fake testDB) FindSongByID(songID int) (general.Song, error) {
 	for _, discography := range fake.songsDB {
 		for _, song := range discography {
@@ -116,6 +155,9 @@ func (fake testDB) FindSongByID(songID int) (general.Song, error) {
 }
 
 func (fake testDB) AddArtist(artist, prefix, linkSpotify string) (general.Artist, error) {
+	if len(artist) == 0 {
+		return general.Artist{}, general.GetDBError("Missing name", general.InvalidInput)
+	}
 	if _, ok := fake.artistsDB[artist]; ok {
 		return general.Artist{}, general.GetDBError("Duplicate artist", general.DuplicateEntry)
 	}
@@ -126,6 +168,9 @@ func (fake testDB) AddArtist(artist, prefix, linkSpotify string) (general.Artist
 }
 
 func (fake testDB) AddSong(song string, artists []general.Artist) (general.Song, error) {
+	if len(song) == 0 {
+		return general.Song{}, general.GetDBError("Missing name", general.InvalidInput)
+	}
 	if len(artists) == 0 {
 		return general.Song{}, general.GetDBError("No artists is given for adding a song", general.InvalidInput)
 	}
@@ -143,13 +188,4 @@ func (fake testDB) AddSong(song string, artists []general.Artist) (general.Song,
 		fake.songsDB[artist.Name][song] = newSong
 	}
 	return newSong, nil
-}
-
-type song struct {
-	artists  []string
-	nameSong string
-}
-
-func getNewSong(nameSong string, artists ...string) song {
-	return song{artists: artists, nameSong: nameSong}
 }

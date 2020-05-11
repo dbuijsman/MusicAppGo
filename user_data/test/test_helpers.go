@@ -4,20 +4,32 @@ import (
 	"general"
 	"net/http"
 	"net/http/httptest"
+	"testing"
+	"user_data/database"
 	"user_data/handlers"
 )
 
-func testUserHandler() *handlers.UserHandler {
-	l := general.TestEmptyLogger()
-	return handlers.NewUserHandler(l, testDB{db: make(map[string]testCredentials)}, general.TestSendMessageEmpty())
+func testServer(t *testing.T, db database.Database) (*http.Server, chan general.Message) {
+	sendMessage, channel := general.TestSendMessage()
+	handler, err := handlers.NewUserHandler(general.TestEmptyLogger(), db, sendMessage)
+	if err != nil {
+		t.Fatalf("Failed to create a testServer due to: %s\n", err)
+	}
+	server, _ := handlers.NewUserServer(handler, nil, "user_data_test", "")
+	return server, channel
+}
+
+type testCredentials struct {
+	id                 int
+	username, password string
 }
 
 type testDB struct {
 	db map[string]testCredentials
 }
-type testCredentials struct {
-	id                 int
-	username, password string
+
+func newTestDB() testDB {
+	return testDB{db: make(map[string]testCredentials)}
 }
 
 func (fake testDB) SignUp(username, password string) (int, error) {

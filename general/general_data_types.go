@@ -1,5 +1,11 @@
 package general
 
+// Service contains the name and address of a microservce. This type will be used for sharing this data with the services
+type Service struct {
+	Name    string `json:"name" validate:"required"`
+	Address string `json:"address" validate:"required"`
+}
+
 // Credentials contains the credentials of an user
 type Credentials struct {
 	ID       int    `json:"id" validate:"required"`
@@ -42,8 +48,14 @@ func NewSong(id int, artists []Artist, song string) Song {
 
 // Preference represents a preference of an user with the id of the song or artist and the page where the request came from.
 type Preference struct {
-	ID int `json:"id" validate:"required"`
+	ID   int    `json:"id" validate:"required"`
+	Page string `json:"page"`
 	//Page string `json:"page" validate:"required"`
+}
+
+// NewPreference returns a Preference with the given data
+func NewPreference(id int, page string) Preference {
+	return Preference{ID: id, Page: page}
 }
 
 // MultipleArtists represents the results of a request in a form containing the found artists and a boolean that shows if there are more results

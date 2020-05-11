@@ -16,17 +16,18 @@ func TestAddUser_saveInDB(t *testing.T) {
 		"No role":       {1, "TestNoRole", "", true},
 		"Complete data": {1, "TestNoRole", "user", true},
 	}
-	for nameCase, caseCreds := range cases {
+	for name, test := range cases {
 		db := newTestDB()
-		handler := testLikesHandlerNilRequest(db)
-		creds := general.NewCredentials(caseCreds.id, caseCreds.username, caseCreds.role)
+		handler := testLikesHandler(db, nil)
+		creds := general.NewCredentials(test.id, test.username, test.role)
 		credsString, err := general.ToJSONBytes(creds)
 		if err != nil {
-			t.Fatalf("%v: Can't serialize %v due to: %s\n", nameCase, creds, err)
+			t.Errorf("%v: Can't serialize %v due to: %s\n", name, creds, err)
+			continue
 		}
 		handler.ConsumeNewUser(credsString)
-		if _, ok := db.users[caseCreds.id]; ok != caseCreds.expectedSavedInDB {
-			t.Errorf("%v: Expects to be saved: %v but got %v\n", nameCase, caseCreds.expectedSavedInDB, ok)
+		if _, ok := db.users[test.id]; ok != test.expectedSavedInDB {
+			t.Errorf("%v: Expects to be saved: %v but got %v\n", name, test.expectedSavedInDB, ok)
 		}
 	}
 }
@@ -42,17 +43,18 @@ func TestAddArtist_saveInDB(t *testing.T) {
 		"No prefix":     {1, "Sum 41", "", true},
 		"Complete data": {1, "Strokes", "The", true},
 	}
-	for nameCase, caseArtist := range cases {
+	for name, test := range cases {
 		db := newTestDB()
-		handler := testLikesHandlerNilRequest(db)
-		artist := general.NewArtist(caseArtist.id, caseArtist.name, caseArtist.prefix)
+		handler := testLikesHandler(db, nil)
+		artist := general.NewArtist(test.id, test.name, test.prefix)
 		artistString, err := general.ToJSONBytes(artist)
 		if err != nil {
-			t.Fatalf("%v: Can't serialize %v due to: %s\n", nameCase, artist, err)
+			t.Errorf("%v: Can't serialize %v due to: %s\n", name, artist, err)
+			continue
 		}
 		handler.ConsumeNewArtist(artistString)
-		if _, ok := db.artists[caseArtist.name]; ok != caseArtist.expectedSavedInDB {
-			t.Errorf("%v: Expects to be saved: %v but got %v\n", nameCase, caseArtist.expectedSavedInDB, ok)
+		if _, ok := db.artists[test.name]; ok != test.expectedSavedInDB {
+			t.Errorf("%v: Expects to be saved: %v but got %v\n", name, test.expectedSavedInDB, ok)
 		}
 	}
 }
@@ -72,22 +74,24 @@ func TestAddSong_saveInDB(t *testing.T) {
 		"Complete data with new artist":      {1, []general.Artist{general.NewArtist(2, "Miike Snow", "")}, "Genghis Khan", true},
 		"Complete data with new artist and existing artist": {1, []general.Artist{general.NewArtist(2, "Zonderling", ""), existingArtist}, "Crazy", true},
 	}
-	for nameCase, caseSong := range cases {
+	for name, test := range cases {
 		db := newTestDB()
-		handler := testLikesHandlerNilRequest(db)
+		handler := testLikesHandler(db, nil)
 		existingArtistString, err := general.ToJSONBytes(existingArtist)
 		handler.ConsumeNewArtist(existingArtistString)
 		if err != nil {
-			t.Fatalf("%v: Can't serialize %v due to: %s\n", nameCase, existingArtist, err)
+			t.Errorf("%v: Can't serialize %v due to: %s\n", name, existingArtist, err)
+			continue
 		}
-		song := general.NewSong(caseSong.id, caseSong.artists, caseSong.name)
+		song := general.NewSong(test.id, test.artists, test.name)
 		songString, err := general.ToJSONBytes(song)
 		if err != nil {
-			t.Fatalf("%v: Can't serialize %v due to: %s\n", nameCase, song, err)
+			t.Errorf("%v: Can't serialize %v due to: %s\n", name, song, err)
+			continue
 		}
 		handler.ConsumeNewSong(songString)
-		if _, ok := db.songs[caseSong.id]; ok != caseSong.expectedSavedInDB {
-			t.Errorf("%v: Expects to be saved: %v but got %v\n", nameCase, caseSong.expectedSavedInDB, ok)
+		if _, ok := db.songs[test.id]; ok != test.expectedSavedInDB {
+			t.Errorf("%v: Expects to be saved: %v but got %v\n", name, test.expectedSavedInDB, ok)
 		}
 	}
 }
