@@ -1,6 +1,8 @@
 package general
 
 import (
+	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -35,5 +37,24 @@ func CreateToken(id int, username, role string) (string, error) {
 
 // CreateTokenInternalRequests creates a jwt for requests between services
 func CreateTokenInternalRequests(servername string) (string, error) {
-	return CreateToken(0, servername, RoleInternal)
+	return CreateToken(-1, servername, RoleInternal)
+}
+
+func validateToken(tokenString string) (Credentials, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return Credentials{}, errors.New("invalid signing method")
+		}
+		return key, nil
+	})
+	if err != nil || !token.Valid {
+		return Credentials{}, fmt.Errorf("[WARNING] Invalid token: %v", err)
+	}
+	claims := token.Claims.(jwt.MapClaims)
+	id, convError := strconv.Atoi(claims["jti"].(string))
+	if convError != nil && claims["jti"].(string) != "" {
+		return Credentials{}, fmt.Errorf("[WARNING] Received signed token with invalid id: %v", convError)
+	}
+	tokenContext := Credentials{ID: id, Username: claims["iss"].(string), Role: claims["aud"].(string)}
+	return tokenContext, nil
 }

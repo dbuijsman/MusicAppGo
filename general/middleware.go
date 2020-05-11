@@ -2,13 +2,9 @@ package general
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
-
-	jwt "github.com/dgrijalva/jwt-go"
 )
 
 func toMiddlerWare(functionAsMiddleWare func(http.ResponseWriter, *http.Request, http.Handler)) func(http.Handler) http.Handler {
@@ -17,25 +13,6 @@ func toMiddlerWare(functionAsMiddleWare func(http.ResponseWriter, *http.Request,
 			functionAsMiddleWare(response, request, next)
 		})
 	}
-}
-
-func validateToken(tokenString string) (Credentials, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return Credentials{}, errors.New("invalid signing method")
-		}
-		return key, nil
-	})
-	if err != nil || !token.Valid {
-		return Credentials{}, fmt.Errorf("[WARNING] Invalid token: %v", err)
-	}
-	claims := token.Claims.(jwt.MapClaims)
-	id, convError := strconv.Atoi(claims["jti"].(string))
-	if convError != nil && claims["jti"].(string) != "" {
-		return Credentials{}, fmt.Errorf("[WARNING] Received signed token with invalid id: %v", convError)
-	}
-	tokenContext := Credentials{ID: id, Username: claims["iss"].(string), Role: claims["aud"].(string)}
-	return tokenContext, nil
 }
 
 // GetValidateTokenMiddleWare return middleware to validate a token
