@@ -1,7 +1,9 @@
 package test
 
 import (
-	"general"
+	"general/convert"
+	"general/testhelpers"
+	"general/types"
 	"net/http"
 	"testing"
 	"time"
@@ -34,7 +36,7 @@ func TestHandlers_response(t *testing.T) {
 			t.Errorf("%v: Failed to run test due to failing signup existing user: %s\n", name, err)
 		}
 		server, _ := testServer(t, db)
-		response := general.TestRequest(t, server, http.MethodPost, test.path, "", handlers.NewClientCredentials(test.username, test.password))
+		response := testhelpers.TestRequest(t, server, http.MethodPost, test.path, "", handlers.NewClientCredentials(test.username, test.password))
 		if response.Code != test.expectedStatusCode {
 			t.Errorf("%v: Expects statuscode: %v but got: %v\n", name, test.expectedStatusCode, response.Code)
 		}
@@ -64,7 +66,7 @@ func TestHandlers_sendMessage(t *testing.T) {
 			continue
 		}
 		server, channel := testServer(t, db)
-		general.TestRequest(t, server, http.MethodPost, test.path, "", handlers.NewClientCredentials(test.username, test.password))
+		testhelpers.TestRequest(t, server, http.MethodPost, test.path, "", handlers.NewClientCredentials(test.username, test.password))
 		go func() {
 			time.Sleep(time.Millisecond)
 			close(channel)
@@ -75,8 +77,8 @@ func TestHandlers_sendMessage(t *testing.T) {
 				t.Errorf("%v: Expects topic %v but got: %v\n", name, test.topic, message.Topic)
 			} else {
 				foundTopic = true
-				var result general.Credentials
-				if err := general.FromJSONBytes(&result, []byte(message.Message)); err != nil {
+				var result types.Credentials
+				if err := convert.FromJSONBytes(&result, []byte(message.Message)); err != nil {
 					t.Errorf("%v: Expects to send a message containing an user but deserializing results in: %v\n", name, err)
 				}
 				if result.ID == 0 {
@@ -105,7 +107,7 @@ func TestSignUp_savingInDB(t *testing.T) {
 	for name, test := range cases {
 		db := newTestDB()
 		server, _ := testServer(t, db)
-		general.TestRequest(t, server, http.MethodPost, "/signup", "", handlers.NewClientCredentials(test.username, test.password))
+		testhelpers.TestRequest(t, server, http.MethodPost, "/signup", "", handlers.NewClientCredentials(test.username, test.password))
 		if _, ok := db.db[test.username]; ok != test.expected {
 			t.Errorf("%v: Signup with username: %v and password: %v expects saving in DB: %v but got: %v\n", name, test.username, test.password, test.expected, ok)
 		}

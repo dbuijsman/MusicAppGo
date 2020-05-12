@@ -2,7 +2,10 @@ package test
 
 import (
 	"fmt"
-	"general"
+	"general/convert"
+	"general/dberror"
+	"general/testhelpers"
+	"general/types"
 	"io"
 	"likes/database"
 	"likes/handlers"
@@ -16,17 +19,17 @@ import (
 	"testing"
 )
 
-func testServer(db database.Database, existingSongs []general.Song) *http.Server {
+func testServer(db database.Database, existingSongs []types.Song) *http.Server {
 	server, _ := handlers.NewLikesServer(testLikesHandler(db, existingSongs), nil, "likes_test", "")
 	return server
 }
 
-func testLikesHandler(db database.Database, existingSongs []general.Song) *handlers.LikesHandler {
-	return handlers.NewLikesHandler(general.TestEmptyLogger(), db, testGetRequest(existingSongs))
+func testLikesHandler(db database.Database, existingSongs []types.Song) *handlers.LikesHandler {
+	return handlers.NewLikesHandler(testhelpers.TestEmptyLogger(), db, testGetRequest(existingSongs))
 }
 
-func testGetRequest(existingSongs []general.Song) func(string) (*http.Response, error) {
-	songDB := make(map[int]general.Song)
+func testGetRequest(existingSongs []types.Song) func(string) (*http.Response, error) {
+	songDB := make(map[int]types.Song)
 	for _, song := range existingSongs {
 		songDB[song.ID] = song
 	}
@@ -53,7 +56,7 @@ func convertMessageInResponse(status int, body interface{}) (*http.Response, err
 	resp.StatusCode = status
 	bodyRequest, writer := io.Pipe()
 	go func() {
-		err = general.WriteToJSON(body, writer)
+		err = convert.WriteToJSON(body, writer)
 		writer.Close()
 	}()
 	resp.Body = bodyRequest
@@ -63,7 +66,7 @@ func convertMessageInResponse(status int, body interface{}) (*http.Response, err
 	return &resp, nil
 }
 
-func addDBToArray(missingSongs []general.Song, db testDB) []general.Song {
+func addDBToArray(missingSongs []types.Song, db testDB) []types.Song {
 	for _, song := range db.songs {
 		missingSongs = append(missingSongs, song)
 	}
@@ -79,23 +82,23 @@ func newPreference(user, song int) preference {
 }
 
 type testDB struct {
-	users    map[int]general.Credentials
-	artists  map[string]general.Artist
-	songs    map[int]general.Song
-	likes    map[int]map[int]general.Song
-	dislikes map[int]map[int]general.Song
+	users    map[int]types.Credentials
+	artists  map[string]types.Artist
+	songs    map[int]types.Song
+	likes    map[int]map[int]types.Song
+	dislikes map[int]map[int]types.Song
 }
 
 func newTestDB() testDB {
-	users := make(map[int]general.Credentials)
-	artists := make(map[string]general.Artist)
-	songs := make(map[int]general.Song)
-	likes := make(map[int]map[int]general.Song)
-	dislikes := make(map[int]map[int]general.Song)
+	users := make(map[int]types.Credentials)
+	artists := make(map[string]types.Artist)
+	songs := make(map[int]types.Song)
+	likes := make(map[int]map[int]types.Song)
+	dislikes := make(map[int]map[int]types.Song)
 	return testDB{users: users, artists: artists, songs: songs, likes: likes, dislikes: dislikes}
 }
 
-func (fake testDB) addPreferencesToTestDB(t *testing.T, userID int, songs []general.Song, prefFunction func(int, int) error) {
+func (fake testDB) addPreferencesToTestDB(t *testing.T, userID int, songs []types.Song, prefFunction func(int, int) error) {
 	fake.addSongsToTestDB(t, songs)
 	for _, song := range songs {
 		if err := prefFunction(userID, song.ID); err != nil {
@@ -104,7 +107,7 @@ func (fake testDB) addPreferencesToTestDB(t *testing.T, userID int, songs []gene
 	}
 }
 
-func (fake testDB) addSongsToTestDB(t *testing.T, songs []general.Song) {
+func (fake testDB) addSongsToTestDB(t *testing.T, songs []types.Song) {
 	for _, song := range songs {
 		for _, artist := range song.Artists {
 			fake.AddArtist(artist)
@@ -116,32 +119,32 @@ func (fake testDB) addSongsToTestDB(t *testing.T, songs []general.Song) {
 	}
 }
 
-func (fake testDB) AddUser(user general.Credentials) error {
+func (fake testDB) AddUser(user types.Credentials) error {
 	if _, ok := fake.users[user.ID]; ok {
-		return general.GetDBError("Duplicate entry", general.DuplicateEntry)
+		return dberror.GetDBError("Duplicate entry", dberror.DuplicateEntry)
 	}
 	fake.users[user.ID] = user
-	fake.likes[user.ID] = make(map[int]general.Song)
-	fake.dislikes[user.ID] = make(map[int]general.Song)
+	fake.likes[user.ID] = make(map[int]types.Song)
+	fake.dislikes[user.ID] = make(map[int]types.Song)
 	return nil
 }
 
-func (fake testDB) AddArtist(artist general.Artist) error {
+func (fake testDB) AddArtist(artist types.Artist) error {
 	if _, ok := fake.artists[artist.Name]; ok {
-		return general.GetDBError("Duplicate entry", general.DuplicateEntry)
+		return dberror.GetDBError("Duplicate entry", dberror.DuplicateEntry)
 	}
 	fake.artists[artist.Name] = artist
 	return nil
 }
 
-func (fake testDB) AddSong(song general.Song) error {
+func (fake testDB) AddSong(song types.Song) error {
 	for _, artist := range song.Artists {
 		if _, ok := fake.artists[artist.Name]; !ok {
-			return general.GetDBError("Missing foreign key", general.MissingForeignKey)
+			return dberror.GetDBError("Missing foreign key", dberror.MissingForeignKey)
 		}
 	}
 	if _, ok := fake.songs[song.ID]; ok {
-		return general.GetDBError("Duplicate entry", general.DuplicateEntry)
+		return dberror.GetDBError("Duplicate entry", dberror.DuplicateEntry)
 	}
 	fake.songs[song.ID] = song
 	return nil
@@ -149,13 +152,13 @@ func (fake testDB) AddSong(song general.Song) error {
 }
 func (fake testDB) AddLike(userID, songID int) error {
 	if _, ok := fake.users[userID]; !ok {
-		return general.GetDBError("Missing key", general.MissingForeignKey)
+		return dberror.GetDBError("Missing key", dberror.MissingForeignKey)
 	}
 	if _, ok := fake.songs[songID]; !ok {
-		return general.GetDBError("Missing key", general.MissingForeignKey)
+		return dberror.GetDBError("Missing key", dberror.MissingForeignKey)
 	}
 	if _, ok := fake.likes[userID][songID]; ok {
-		return general.GetDBError("Duplicate entry", general.DuplicateEntry)
+		return dberror.GetDBError("Duplicate entry", dberror.DuplicateEntry)
 	}
 	fake.likes[userID][songID] = fake.songs[songID]
 	return nil
@@ -163,13 +166,13 @@ func (fake testDB) AddLike(userID, songID int) error {
 
 func (fake testDB) AddDislike(userID, songID int) error {
 	if _, ok := fake.users[userID]; !ok {
-		return general.GetDBError("Missing key", general.MissingForeignKey)
+		return dberror.GetDBError("Missing key", dberror.MissingForeignKey)
 	}
 	if _, ok := fake.songs[songID]; !ok {
-		return general.GetDBError("Missing key", general.MissingForeignKey)
+		return dberror.GetDBError("Missing key", dberror.MissingForeignKey)
 	}
 	if _, ok := fake.dislikes[userID][songID]; ok {
-		return general.GetDBError("Duplicate entry", general.DuplicateEntry)
+		return dberror.GetDBError("Duplicate entry", dberror.DuplicateEntry)
 	}
 	fake.dislikes[userID][songID] = fake.songs[songID]
 	return nil
@@ -189,12 +192,12 @@ func (fake testDB) RemoveDislike(userID, songID int) error {
 	return nil
 }
 
-func (fake testDB) GetLikes(userID, offset, max int) ([]general.Song, error) {
+func (fake testDB) GetLikes(userID, offset, max int) ([]types.Song, error) {
 	if max <= 0 || offset < 0 {
-		return nil, general.GetDBError("Can not search with negative offset or non-positive max", general.InvalidOffsetMax)
+		return nil, dberror.GetDBError("Can not search with negative offset or non-positive max", dberror.InvalidOffsetMax)
 	}
 	likesUser := fake.likes[userID]
-	likedSongs := make([]general.Song, 0, len(likesUser))
+	likedSongs := make([]types.Song, 0, len(likesUser))
 	for _, song := range likesUser {
 		song.Preference = "like"
 		likedSongs = append(likedSongs, song)
@@ -205,12 +208,12 @@ func (fake testDB) GetLikes(userID, offset, max int) ([]general.Song, error) {
 	return likedSongs[int(math.Min(float64(offset), float64(len(likedSongs)))):int(math.Min(float64(offset+max), float64(len(likedSongs))))], nil
 }
 
-func (fake testDB) GetDislikes(userID, offset, max int) ([]general.Song, error) {
+func (fake testDB) GetDislikes(userID, offset, max int) ([]types.Song, error) {
 	if max <= 0 || offset < 0 {
-		return nil, general.GetDBError("Can not search with negative offset or non-positive max", general.InvalidOffsetMax)
+		return nil, dberror.GetDBError("Can not search with negative offset or non-positive max", dberror.InvalidOffsetMax)
 	}
 	dislikesUser := fake.dislikes[userID]
-	dislikedSongs := make([]general.Song, 0, len(dislikesUser))
+	dislikedSongs := make([]types.Song, 0, len(dislikesUser))
 	for _, song := range dislikesUser {
 		song.Preference = "dislike"
 		dislikedSongs = append(dislikedSongs, song)
@@ -221,7 +224,7 @@ func (fake testDB) GetDislikes(userID, offset, max int) ([]general.Song, error) 
 	return dislikedSongs[int(math.Min(float64(offset), float64(len(dislikedSongs)))):int(math.Min(float64(offset+max), float64(len(dislikedSongs))))], nil
 }
 
-func songIsSmallerThan(song1, song2 general.Song) bool {
+func songIsSmallerThan(song1, song2 types.Song) bool {
 	firstArtistSong1 := getFirstOrderedArtist(song1)
 	firstArtistSong2 := getFirstOrderedArtist(song2)
 	if firstArtistSong1.Name < firstArtistSong2.Name {
@@ -233,8 +236,8 @@ func songIsSmallerThan(song1, song2 general.Song) bool {
 	return song1.Name < song2.Name
 }
 
-func getFirstOrderedArtist(song general.Song) general.Artist {
-	artists := make([]general.Artist, len(song.Artists))
+func getFirstOrderedArtist(song types.Song) types.Artist {
+	artists := make([]types.Artist, len(song.Artists))
 	copy(artists, song.Artists)
 	sort.SliceStable(artists, func(i, j int) bool {
 		return artists[i].Name < artists[j].Name

@@ -2,7 +2,9 @@ package test
 
 import (
 	"discography/handlers"
-	"general"
+	"general/convert"
+	"general/testhelpers"
+	"general/types"
 	"net/http"
 	"testing"
 )
@@ -64,16 +66,16 @@ func TestUsersHandlers_response(t *testing.T) {
 			t.Fatalf("Can't add song for test TestAdminHandlers_response due to: %s\n", err)
 			continue
 		}
-		server, _ := testServerNoRequest(t, db)
-		response := general.TestRequest(t, server, http.MethodGet, test.path, "", nil)
+		testServer, _ := testServerNoRequest(t, db)
+		response := testhelpers.TestRequest(t, testServer, http.MethodGet, test.path, "", nil)
 		if response.Code != test.expectedStatusCode {
 			t.Errorf("%v: Expects statuscode: %v but got: %v\n", name, test.expectedStatusCode, response.Code)
 		}
 		if response.Code != http.StatusOK {
 			continue
 		}
-		var results general.Music
-		if err := general.ReadFromJSON(&results, response.Body); err != nil {
+		var results types.Music
+		if err := convert.ReadFromJSON(&results, response.Body); err != nil {
 			t.Errorf("[ERROR] %v: Decoding response: %v\n", name, err)
 			continue
 		}
@@ -88,7 +90,7 @@ func TestUsersHandlers_response(t *testing.T) {
 
 func TestArtistStartingWith_orderResults(t *testing.T) {
 	// The artists are ordered by name but not by id.
-	artists := []general.Artist{general.NewArtist(12, "Beatles", "The"), general.NewArtist(2, "Blur", ""), general.NewArtist(21, "Bob Dylan", ""), general.NewArtist(3, "Bon Jovi", "")}
+	artists := []types.Artist{types.NewArtist(12, "Beatles", "The"), types.NewArtist(2, "Blur", ""), types.NewArtist(21, "Bob Dylan", ""), types.NewArtist(3, "Bon Jovi", "")}
 	cases := map[string]struct {
 		path              string
 		indexExpectedName int
@@ -107,14 +109,14 @@ func TestArtistStartingWith_orderResults(t *testing.T) {
 				t.Fatalf("Can't start test TestArtistStartingWith_orderResults due to failure of adding artist %v:%s\n", artist.Name, err)
 			}
 		}
-		server, _ := testServerNoRequest(t, db)
-		response := general.TestRequest(t, server, http.MethodGet, test.path, "", nil)
+		testServer, _ := testServerNoRequest(t, db)
+		response := testhelpers.TestRequest(t, testServer, http.MethodGet, test.path, "", nil)
 		if response.Code != http.StatusOK {
 			t.Errorf("%v: Expects statuscode %v but got: %v\n", name, http.StatusOK, response.Code)
 			continue
 		}
-		var result general.MultipleArtists
-		if err := general.ReadFromJSON(&result, response.Body); err != nil {
+		var result types.MultipleArtists
+		if err := convert.ReadFromJSON(&result, response.Body); err != nil {
 			t.Errorf("[ERROR] %v: Decoding response: %v\n", name, err)
 			continue
 		}
@@ -149,18 +151,18 @@ func TestSongsFromArtist_orderResults(t *testing.T) {
 			t.Fatalf("Can't start test TestSongsFromArtist_orderResults due to failure of adding artist Bon Jovi:%s\n", err)
 		}
 		for _, song := range songsBonJovi {
-			if _, err := db.AddSong(song, []general.Artist{artist}); err != nil {
+			if _, err := db.AddSong(song, []types.Artist{artist}); err != nil {
 				t.Fatalf("Can't start test TestSongsFromArtist_correctOrderResults due to failure of adding song %v:%s\n", song, err)
 			}
 		}
-		server, _ := testServerNoRequest(t, db)
-		response := general.TestRequest(t, server, http.MethodGet, test.path, "", nil)
+		testServer, _ := testServerNoRequest(t, db)
+		response := testhelpers.TestRequest(t, testServer, http.MethodGet, test.path, "", nil)
 		if response.Code != http.StatusOK {
 			t.Errorf("%v: Expects statuscode %v but got: %v\n", name, http.StatusOK, response.Code)
 			continue
 		}
-		var result general.MultipleSongs
-		if err = general.ReadFromJSON(&result, response.Body); err != nil {
+		var result types.MultipleSongs
+		if err = convert.ReadFromJSON(&result, response.Body); err != nil {
 			t.Errorf("[ERROR] %v: Decoding response: %v\n", name, err)
 			continue
 		}

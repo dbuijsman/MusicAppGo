@@ -1,9 +1,11 @@
-package general
+package server
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
+	"general/convert"
+	"general/types"
 	"log"
 	"net/http"
 	"os"
@@ -34,13 +36,13 @@ func ConnectToMYSQL(logger *log.Logger, servername, dataSourceName string) (*sql
 }
 
 // NewServer returns a server on the given port with the given router, a channel that sends addresses of other services and a start function in order to start the server
-func NewServer(servername, port string, router *mux.Router, broker *kafka.Broker, messageConsumer func(), logger *log.Logger) (server *http.Server, channelNewService chan Service, start func()) {
+func NewServer(servername, port string, router *mux.Router, broker *kafka.Broker, messageConsumer func(), logger *log.Logger) (server *http.Server, channelNewService chan types.Service, start func()) {
 	server = &http.Server{
 		Addr:     port,
 		Handler:  router,
 		ErrorLog: logger,
 	}
-	channelNewService = make(chan Service)
+	channelNewService = make(chan types.Service)
 	start = func() {
 		go getAddressesServices(logger, channelNewService, servername)
 		go registerService(logger, broker, servername, port)
@@ -62,14 +64,15 @@ func NewServer(servername, port string, router *mux.Router, broker *kafka.Broker
 		signal.Notify(c, os.Kill)
 		sig := <-c
 		logger.Printf("Shutting down server %v due to %v signal\n", servername, sig)
-		ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 		server.Shutdown(ctx)
 		logger.Printf("Server %v is shut down!\n", servername)
 	}
 	return
 }
 
-func getAddressesServices(logger *log.Logger, channel chan<- Service, servername string) {
+func getAddressesServices(logger *log.Logger, channel chan<- types.Service, servername string) {
 	if servername == gateway {
 		return
 	}
@@ -87,8 +90,8 @@ func getAddressesServices(logger *log.Logger, channel chan<- Service, servername
 		logger.Printf("Failed to obtain list of services due to failed request with errorcode: %v\n", response.StatusCode)
 		return
 	}
-	var services map[string]Service
-	if err := ReadFromJSONNoValidation(&services, response.Body); err != nil {
+	var services map[string]types.Service
+	if err := convert.ReadFromJSONNoValidation(&services, response.Body); err != nil {
 		logger.Printf("[ERROR] Failed to decode response of getting a list of services: %s\n", err)
 		return
 	}
@@ -99,7 +102,7 @@ func getAddressesServices(logger *log.Logger, channel chan<- Service, servername
 }
 
 func registerService(logger *log.Logger, broker *kafka.Broker, servername, port string) {
-	messageService, err := ToJSONBytes(&Service{Name: servername, Address: port})
+	messageService, err := convert.ToJSONBytes(&types.Service{Name: servername, Address: port})
 	if err != nil {
 		logger.Fatalf("Can't register service %v due to: %s\n", servername, err)
 	}
@@ -107,10 +110,10 @@ func registerService(logger *log.Logger, broker *kafka.Broker, servername, port 
 	sendMessage("newService", messageService)
 }
 
-func getConsumeNewService(logger *log.Logger, channel chan<- Service) func(message []byte) {
+func getConsumeNewService(logger *log.Logger, channel chan<- types.Service) func(message []byte) {
 	return func(message []byte) {
-		var newService Service
-		if err := FromJSONBytes(&newService, message); err != nil {
+		var newService types.Service
+		if err := convert.FromJSONBytes(&newService, message); err != nil {
 			logger.Printf("Failed to deserialize message: %v due to: %s\n", string(message), err)
 			return
 		}

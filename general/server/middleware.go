@@ -1,7 +1,8 @@
-package general
+package server
 
 import (
 	"context"
+	"general/types"
 	"log"
 	"net/http"
 	"strconv"
@@ -19,7 +20,7 @@ func toMiddlerWare(functionAsMiddleWare func(http.ResponseWriter, *http.Request,
 func GetValidateTokenMiddleWare(logger *log.Logger) func(http.Handler) http.Handler {
 	return toMiddlerWare(func(response http.ResponseWriter, request *http.Request, next http.Handler) {
 		if request.Header["Token"] == nil {
-			logger.Println("[WARNING] Unauthorized request\n")
+			logger.Printf("[WARNING] Unauthorized request\n")
 			http.Error(response, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
@@ -29,7 +30,7 @@ func GetValidateTokenMiddleWare(logger *log.Logger) func(http.Handler) http.Hand
 			http.Error(response, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
-		ctx := context.WithValue(request.Context(), Credentials{}, token)
+		ctx := context.WithValue(request.Context(), types.Credentials{}, token)
 		request = request.WithContext(ctx)
 		next.ServeHTTP(response, request)
 	})
@@ -48,7 +49,7 @@ func GetAddTokenToContextMiddleware(logger *log.Logger) func(http.Handler) http.
 			next.ServeHTTP(response, request)
 			return
 		}
-		ctx := context.WithValue(request.Context(), Credentials{}, token)
+		ctx := context.WithValue(request.Context(), types.Credentials{}, token)
 		request = request.WithContext(ctx)
 		next.ServeHTTP(response, request)
 	})
@@ -69,7 +70,7 @@ func GetTokenMiddleWareForSpecificRole(logger *log.Logger, role string) func(htt
 	tokenValidator := GetValidateTokenMiddleWare(logger)
 	return func(next http.Handler) http.Handler {
 		return tokenValidator(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-			ctx := request.Context().Value(Credentials{}).(Credentials)
+			ctx := request.Context().Value(types.Credentials{}).(types.Credentials)
 			if ctx.Role != role {
 				logger.Printf("[WARNING] Non-%v tries to access %v content: %v\n", role, role, ctx.Username)
 				http.Error(response, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)

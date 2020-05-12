@@ -3,7 +3,7 @@ package handlers
 import (
 	"discography/database"
 	"errors"
-	"general"
+	"general/server"
 	"log"
 	"net/http"
 
@@ -19,9 +19,9 @@ const servername string = "discography"
 var portLikes string
 
 // NewMusicServer returns a new server for music and a function that starts up the server
-func NewMusicServer(handler *MusicHandler, broker *kafka.Broker, servername, port string) (server *http.Server, start func()) {
-	s, channel, startServer := general.NewServer(servername, port, initRoutes(handler), broker, nil, handler.Logger)
-	server = s
+func NewMusicServer(handler *MusicHandler, broker *kafka.Broker, servername, port string) (newServer *http.Server, start func()) {
+	s, channel, startServer := server.NewServer(servername, port, initRoutes(handler), broker, nil, handler.Logger)
+	newServer = s
 	start = func() {
 		go func() {
 			for service := range channel {
@@ -41,18 +41,18 @@ func initRoutes(handler *MusicHandler) *mux.Router {
 	router.Handle("/metrics", promhttp.Handler())
 
 	getR := router.PathPrefix("/api").Methods(http.MethodGet).Subrouter()
-	getR.Use(general.GetAddTokenToContextMiddleware(handler.Logger))
-	getR.Use(general.GetOffsetMaxMiddleware(handler.Logger))
+	getR.Use(server.GetAddTokenToContextMiddleware(handler.Logger))
+	getR.Use(server.GetOffsetMaxMiddleware(handler.Logger))
 	getR.Path("/artists/{firstLetter}").HandlerFunc(handler.ArtistStartingWith)
 	getR.Path("/artist/{artist}").HandlerFunc(handler.SongsFromArtist)
 
 	adminR := router.PathPrefix("/admin").Methods(http.MethodPost).Subrouter()
-	adminR.Use(general.GetIsAdminMiddleware(handler.Logger))
+	adminR.Use(server.GetIsAdminMiddleware(handler.Logger))
 	adminR.Path("/artist").HandlerFunc(handler.AddArtistHandler)
 	adminR.Path("/song").HandlerFunc(handler.AddSongHandler)
 
 	internalR := router.PathPrefix("/intern").Methods(http.MethodGet).Subrouter()
-	internalR.Use(general.GetInternalRequestMiddleware(handler.Logger))
+	internalR.Use(server.GetInternalRequestMiddleware(handler.Logger))
 	internalR.Path("/artist/{id}").HandlerFunc(handler.FindArtistByID)
 	internalR.Path("/song/{id}").HandlerFunc(handler.FindSongByID)
 	return router
@@ -75,7 +75,7 @@ func NewMusicHandler(logger *log.Logger, db database.Database, sendMessage func(
 	}
 	if get == nil {
 		var err error
-		get, err = general.GetInternalGETRequest(servername)
+		get, err = server.GetInternalGETRequest(servername)
 		if err != nil {
 			return nil, err
 		}

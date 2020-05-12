@@ -1,26 +1,29 @@
 package test
 
 import (
-	"general"
+	"general/convert"
+	"general/server"
+	"general/testhelpers"
+	"general/types"
 	"net/http"
 	"testing"
 )
 
 func TestGetHandlers_response(t *testing.T) {
-	user := general.NewCredentials(1, "Test", "user")
-	userWithNoPrefs := general.NewCredentials(2, "NoPrefs", "user")
-	missingUser := general.NewCredentials(3, "Missing", "user")
-	artists := map[string]general.Artist{
-		"Sum 41":   general.NewArtist(1, "Sum 41", ""),
-		"Slipknot": general.NewArtist(2, "Slipknot", ""),
-		"ZZ Top":   general.NewArtist(3, "ZZ Top", ""),
+	user := types.NewCredentials(1, "Test", "user")
+	userWithNoPrefs := types.NewCredentials(2, "NoPrefs", "user")
+	missingUser := types.NewCredentials(3, "Missing", "user")
+	artists := map[string]types.Artist{
+		"Sum 41":   types.NewArtist(1, "Sum 41", ""),
+		"Slipknot": types.NewArtist(2, "Slipknot", ""),
+		"ZZ Top":   types.NewArtist(3, "ZZ Top", ""),
 	}
-	likedSongs := []general.Song{general.NewSong(11, []general.Artist{artists["Sum 41"]}, "In Too Deep"), general.NewSong(12, []general.Artist{artists["Sum 41"]}, "Walking Disaster"), general.NewSong(13, []general.Artist{artists["Slipknot"]}, "Duality"), general.NewSong(14, []general.Artist{artists["Slipknot"]}, "Snuff")}
-	dislikedSongs := []general.Song{general.NewSong(21, []general.Artist{artists["ZZ Top"]}, "Viva Las Vegas"), general.NewSong(22, []general.Artist{artists["ZZ Top"]}, "I Gotsta Get Paid"), general.NewSong(23, []general.Artist{artists["ZZ Top"]}, "La Grange"), general.NewSong(24, []general.Artist{artists["Slipknot"]}, "Nero Forte")}
-	otherSongs := []general.Song{general.NewSong(31, []general.Artist{artists["Sum 41"]}, "Reason to Believe")}
+	likedSongs := []types.Song{types.NewSong(11, []types.Artist{artists["Sum 41"]}, "In Too Deep"), types.NewSong(12, []types.Artist{artists["Sum 41"]}, "Walking Disaster"), types.NewSong(13, []types.Artist{artists["Slipknot"]}, "Duality"), types.NewSong(14, []types.Artist{artists["Slipknot"]}, "Snuff")}
+	dislikedSongs := []types.Song{types.NewSong(21, []types.Artist{artists["ZZ Top"]}, "Viva Las Vegas"), types.NewSong(22, []types.Artist{artists["ZZ Top"]}, "I Gotsta Get Paid"), types.NewSong(23, []types.Artist{artists["ZZ Top"]}, "La Grange"), types.NewSong(24, []types.Artist{artists["Slipknot"]}, "Nero Forte")}
+	otherSongs := []types.Song{types.NewSong(31, []types.Artist{artists["Sum 41"]}, "Reason to Believe")}
 	cases := map[string]struct {
 		path                  string
-		credentials           *general.Credentials
+		credentials           *types.Credentials
 		expectedStatusCode    int
 		expectedAmountResults int
 		expectedHasNext       bool
@@ -59,25 +62,25 @@ func TestGetHandlers_response(t *testing.T) {
 		db.addPreferencesToTestDB(t, user.ID, likedSongs, db.AddLike)
 		db.addPreferencesToTestDB(t, user.ID, dislikedSongs, db.AddDislike)
 		db.addSongsToTestDB(t, otherSongs)
-		server := testServer(db, addDBToArray(make([]general.Song, 0), db))
+		testServer := testServer(db, addDBToArray(make([]types.Song, 0), db))
 		token := ""
 		if test.credentials != nil {
 			var err error
-			token, err = general.CreateToken(test.credentials.ID, test.credentials.Username, test.credentials.Role)
+			token, err = server.CreateToken(test.credentials.ID, test.credentials.Username, test.credentials.Role)
 			if err != nil {
 				t.Errorf("%v: Failed to send token with request: %s\n", name, err)
 				continue
 			}
 		}
-		response := general.TestRequest(t, server, http.MethodGet, test.path, token, nil)
+		response := testhelpers.TestRequest(t, testServer, http.MethodGet, test.path, token, nil)
 		if response.Code != test.expectedStatusCode {
 			t.Errorf("%v: Expects statuscode: %v but got: %v\n", name, test.expectedStatusCode, response.Code)
 		}
 		if response.Code != http.StatusOK {
 			continue
 		}
-		var results general.MultipleSongs
-		if err := general.ReadFromJSON(&results, response.Body); err != nil {
+		var results types.MultipleSongs
+		if err := convert.ReadFromJSON(&results, response.Body); err != nil {
 			t.Errorf("[ERROR] %v: Decoding response: %v\n", name, err)
 			continue
 		}
@@ -91,19 +94,19 @@ func TestGetHandlers_response(t *testing.T) {
 }
 
 func TestGetHandlers_orderResults(t *testing.T) {
-	user := general.NewCredentials(1, "Test", "user")
-	artists := map[string]general.Artist{
-		"Iggy Pop":         general.NewArtist(1, "Iggy Pop", ""),
-		"Lost Frequencies": general.NewArtist(2, "Lost Frequencies", ""),
-		"Sum 41":           general.NewArtist(3, "Sum 41", ""),
-		"Slipknot":         general.NewArtist(4, "Slipknot", ""),
-		"Zonderling":       general.NewArtist(5, "Zonderling", ""),
-		"ZZ Top":           general.NewArtist(6, "ZZ Top", ""),
+	user := types.NewCredentials(1, "Test", "user")
+	artists := map[string]types.Artist{
+		"Iggy Pop":         types.NewArtist(1, "Iggy Pop", ""),
+		"Lost Frequencies": types.NewArtist(2, "Lost Frequencies", ""),
+		"Sum 41":           types.NewArtist(3, "Sum 41", ""),
+		"Slipknot":         types.NewArtist(4, "Slipknot", ""),
+		"Zonderling":       types.NewArtist(5, "Zonderling", ""),
+		"ZZ Top":           types.NewArtist(6, "ZZ Top", ""),
 	}
 	// likedSongs and dislikedSongs are ordered by artist and then by name of the song. Artists of collaborations are sorted in reverse order
-	likedSongs := []general.Song{general.NewSong(15, []general.Artist{artists["Iggy Pop"]}, "I'm Bored"), general.NewSong(16, []general.Artist{artists["Sum 41"], artists["Iggy Pop"]}, "Little Know It All"), general.NewSong(13, []general.Artist{artists["Slipknot"]}, "Duality"), general.NewSong(14, []general.Artist{artists["Slipknot"]}, "Snuff"), general.NewSong(11, []general.Artist{artists["Sum 41"]}, "In Too Deep"), general.NewSong(12, []general.Artist{artists["Sum 41"]}, "Walking Disaster")}
-	dislikedSongs := []general.Song{general.NewSong(26, []general.Artist{artists["Lost Frequencies"]}, "Are You With Me"), general.NewSong(25, []general.Artist{artists["Zonderling"], artists["Lost Frequencies"]}, "Crazy"), general.NewSong(23, []general.Artist{artists["Slipknot"]}, "All Out Life"), general.NewSong(24, []general.Artist{artists["Slipknot"]}, "Nero Forte"), general.NewSong(22, []general.Artist{artists["ZZ Top"]}, "I Gotsta Get Paid"), general.NewSong(21, []general.Artist{artists["ZZ Top"]}, "Viva Las Vegas")}
-	otherSongs := []general.Song{general.NewSong(31, []general.Artist{artists["Sum 41"]}, "Reason to Believe")}
+	likedSongs := []types.Song{types.NewSong(15, []types.Artist{artists["Iggy Pop"]}, "I'm Bored"), types.NewSong(16, []types.Artist{artists["Sum 41"], artists["Iggy Pop"]}, "Little Know It All"), types.NewSong(13, []types.Artist{artists["Slipknot"]}, "Duality"), types.NewSong(14, []types.Artist{artists["Slipknot"]}, "Snuff"), types.NewSong(11, []types.Artist{artists["Sum 41"]}, "In Too Deep"), types.NewSong(12, []types.Artist{artists["Sum 41"]}, "Walking Disaster")}
+	dislikedSongs := []types.Song{types.NewSong(26, []types.Artist{artists["Lost Frequencies"]}, "Are You With Me"), types.NewSong(25, []types.Artist{artists["Zonderling"], artists["Lost Frequencies"]}, "Crazy"), types.NewSong(23, []types.Artist{artists["Slipknot"]}, "All Out Life"), types.NewSong(24, []types.Artist{artists["Slipknot"]}, "Nero Forte"), types.NewSong(22, []types.Artist{artists["ZZ Top"]}, "I Gotsta Get Paid"), types.NewSong(21, []types.Artist{artists["ZZ Top"]}, "Viva Las Vegas")}
+	otherSongs := []types.Song{types.NewSong(31, []types.Artist{artists["Sum 41"]}, "Reason to Believe")}
 	cases := map[string]struct {
 		path                                           string
 		indexResult                                    int
@@ -124,7 +127,7 @@ func TestGetHandlers_orderResults(t *testing.T) {
 		"GetDislikes: Skip the right songs when offset is given":              {"/api/dislike?offset=2", 0, "Slipknot", "All Out Life", "dislike"},
 		"GetDislikes: Stops ar the right artist when max is given":            {"/api/dislike?max=4", 3, "Slipknot", "Nero Forte", "dislike"},
 	}
-	token, err := general.CreateToken(1, "test", "admin")
+	token, err := server.CreateToken(1, "test", "admin")
 	if err != nil {
 		t.Fatalf("Can't start TestGetHandlers_orderResults due to failure creating token:%s\n", err)
 	}
@@ -136,14 +139,14 @@ func TestGetHandlers_orderResults(t *testing.T) {
 		db.addPreferencesToTestDB(t, user.ID, likedSongs, db.AddLike)
 		db.addPreferencesToTestDB(t, user.ID, dislikedSongs, db.AddDislike)
 		db.addSongsToTestDB(t, otherSongs)
-		server := testServer(db, addDBToArray(make([]general.Song, 0), db))
-		response := general.TestRequest(t, server, http.MethodGet, test.path, token, nil)
+		testServer := testServer(db, addDBToArray(make([]types.Song, 0), db))
+		response := testhelpers.TestRequest(t, testServer, http.MethodGet, test.path, token, nil)
 		if response.Code != http.StatusOK {
 			t.Errorf("%v: Expects statuscode %v but got: %v\n", name, http.StatusOK, response.Code)
 			continue
 		}
-		var results general.MultipleSongs
-		if err := general.ReadFromJSON(&results, response.Body); err != nil {
+		var results types.MultipleSongs
+		if err := convert.ReadFromJSON(&results, response.Body); err != nil {
 			t.Errorf("[ERROR] %v: Decoding response: %v\n", name, err)
 			continue
 		}

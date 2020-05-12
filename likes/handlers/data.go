@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"general"
+	"general/server"
 	"likes/database"
 	"log"
 	"net/http"
@@ -19,15 +19,15 @@ var portDiscography string
 
 // NewLikesServer returns a new server for likes and dislikes and a function that starts up the server.
 // If broker is nil, then there will be no messages consumed.
-func NewLikesServer(handler *LikesHandler, broker *kafka.Broker, servername, port string) (server *http.Server, start func()) {
+func NewLikesServer(handler *LikesHandler, broker *kafka.Broker, servername, port string) (newServer *http.Server, start func()) {
 	var startConsumer func()
 	if broker != nil {
 		startConsumer = func() {
 			handler.StartConsuming(broker)
 		}
 	}
-	s, channel, startServer := general.NewServer(servername, port, initRoutes(handler), broker, startConsumer, handler.Logger)
-	server = s
+	s, channel, startServer := server.NewServer(servername, port, initRoutes(handler), broker, startConsumer, handler.Logger)
+	newServer = s
 	start = func() {
 		go func() {
 			for service := range channel {
@@ -47,10 +47,10 @@ func initRoutes(handler *LikesHandler) *mux.Router {
 	router.Handle("/metrics", promhttp.Handler())
 
 	clientR := router.PathPrefix("/api").Subrouter()
-	clientR.Use(general.GetValidateTokenMiddleWare(handler.Logger))
+	clientR.Use(server.GetValidateTokenMiddleWare(handler.Logger))
 
 	getR := clientR.Methods(http.MethodGet).Subrouter()
-	getR.Use(general.GetOffsetMaxMiddleware(handler.Logger))
+	getR.Use(server.GetOffsetMaxMiddleware(handler.Logger))
 	getR.PathPrefix("/like").HandlerFunc(handler.GetLikes)
 	getR.PathPrefix("/dislike").HandlerFunc(handler.GetDislikes)
 
@@ -63,7 +63,7 @@ func initRoutes(handler *LikesHandler) *mux.Router {
 	dislikesR.Methods(http.MethodDelete).HandlerFunc(handler.RemoveDislike)
 
 	internalR := router.PathPrefix("/intern").Methods(http.MethodGet).Subrouter()
-	internalR.Use(general.GetInternalRequestMiddleware(handler.Logger))
+	internalR.Use(server.GetInternalRequestMiddleware(handler.Logger))
 	internalR.Path("/preference/{user}/{artist}").HandlerFunc(handler.GetPreferencesOfArtist)
 	return router
 }
@@ -80,7 +80,7 @@ type LikesHandler struct {
 func NewLikesHandler(logger *log.Logger, db database.Database, get func(string) (*http.Response, error)) *LikesHandler {
 	if get == nil {
 		var err error
-		get, err = general.GetInternalGETRequest(servername)
+		get, err = server.GetInternalGETRequest(servername)
 		if err != nil {
 			logger.Fatalf("Can't create a client for sending get requests: %s\n", err)
 		}

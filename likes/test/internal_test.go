@@ -1,33 +1,36 @@
 package test
 
 import (
-	"general"
+	"general/convert"
+	"general/server"
+	"general/testhelpers"
+	"general/types"
 	"net/http"
 	"testing"
 )
 
 func TestInternal_response(t *testing.T) {
-	user := general.NewCredentials(1, "Test", "user")
+	user := types.NewCredentials(1, "Test", "user")
 	var internal, userToken, adminToken string
 	var err error
-	if internal, err = general.CreateTokenInternalRequests("testServer"); err != nil {
+	if internal, err = server.CreateTokenInternalRequests("testServer"); err != nil {
 		t.Fatalf("Failed to create internal token: %s\n", err)
 	}
-	if userToken, err = general.CreateToken(user.ID, user.Username, user.Role); err != nil {
+	if userToken, err = server.CreateToken(user.ID, user.Username, user.Role); err != nil {
 		t.Fatalf("Failed to create user token: %s\n", err)
 	}
-	if adminToken, err = general.CreateToken(2, "testAdmin", "admin"); err != nil {
+	if adminToken, err = server.CreateToken(2, "testAdmin", "admin"); err != nil {
 		t.Logf("%v, %v\n", userToken, adminToken)
 		t.Fatalf("Failed to create admin token: %s\n", err)
 	}
-	artists := map[string]general.Artist{
-		"Sum 41":   general.NewArtist(1, "Sum 41", ""),
-		"Slipknot": general.NewArtist(2, "Slipknot", ""),
-		"ZZ Top":   general.NewArtist(3, "ZZ Top", ""),
+	artists := map[string]types.Artist{
+		"Sum 41":   types.NewArtist(1, "Sum 41", ""),
+		"Slipknot": types.NewArtist(2, "Slipknot", ""),
+		"ZZ Top":   types.NewArtist(3, "ZZ Top", ""),
 	}
-	likedSongs := []general.Song{general.NewSong(11, []general.Artist{artists["Sum 41"]}, "In Too Deep"), general.NewSong(12, []general.Artist{artists["Sum 41"]}, "Walking Disaster"), general.NewSong(13, []general.Artist{artists["Slipknot"]}, "Duality"), general.NewSong(14, []general.Artist{artists["Slipknot"]}, "Snuff")}
-	dislikedSongs := []general.Song{general.NewSong(21, []general.Artist{artists["ZZ Top"]}, "Viva Las Vegas"), general.NewSong(22, []general.Artist{artists["ZZ Top"]}, "I Gotsta Get Paid"), general.NewSong(23, []general.Artist{artists["ZZ Top"]}, "La Grange"), general.NewSong(24, []general.Artist{artists["Slipknot"]}, "Nero Forte")}
-	otherSongs := []general.Song{general.NewSong(31, []general.Artist{artists["Sum 41"]}, "Reason to Believe")}
+	likedSongs := []types.Song{types.NewSong(11, []types.Artist{artists["Sum 41"]}, "In Too Deep"), types.NewSong(12, []types.Artist{artists["Sum 41"]}, "Walking Disaster"), types.NewSong(13, []types.Artist{artists["Slipknot"]}, "Duality"), types.NewSong(14, []types.Artist{artists["Slipknot"]}, "Snuff")}
+	dislikedSongs := []types.Song{types.NewSong(21, []types.Artist{artists["ZZ Top"]}, "Viva Las Vegas"), types.NewSong(22, []types.Artist{artists["ZZ Top"]}, "I Gotsta Get Paid"), types.NewSong(23, []types.Artist{artists["ZZ Top"]}, "La Grange"), types.NewSong(24, []types.Artist{artists["Slipknot"]}, "Nero Forte")}
+	otherSongs := []types.Song{types.NewSong(31, []types.Artist{artists["Sum 41"]}, "Reason to Believe")}
 	cases := map[string]struct {
 		path, token        string
 		idExpectedTag      int
@@ -53,8 +56,8 @@ func TestInternal_response(t *testing.T) {
 		db.addPreferencesToTestDB(t, user.ID, likedSongs, db.AddLike)
 		db.addPreferencesToTestDB(t, user.ID, dislikedSongs, db.AddDislike)
 		db.addSongsToTestDB(t, otherSongs)
-		server := testServer(db, addDBToArray(make([]general.Song, 0), db))
-		response := general.TestRequest(t, server, http.MethodGet, test.path, test.token, nil)
+		testServer := testServer(db, addDBToArray(make([]types.Song, 0), db))
+		response := testhelpers.TestRequest(t, testServer, http.MethodGet, test.path, test.token, nil)
 		if response.Code != test.expectedStatusCode {
 			t.Errorf("%v: Expects statuscode: %v but got: %v\n", name, test.expectedStatusCode, response.Code)
 		}
@@ -62,7 +65,7 @@ func TestInternal_response(t *testing.T) {
 			continue
 		}
 		var resultsMap map[int]string
-		if err := general.ReadFromJSONNoValidation(&resultsMap, response.Body); err != nil {
+		if err := convert.ReadFromJSONNoValidation(&resultsMap, response.Body); err != nil {
 			t.Errorf("[ERROR] %v: Decoding response: %s\n", name, err)
 			continue
 		}

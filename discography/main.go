@@ -1,7 +1,7 @@
 package main
 
 import (
-	"general"
+	"general/server"
 	"log"
 	"os"
 
@@ -18,20 +18,20 @@ const servername string = "discography"
 
 func main() {
 	logger := log.New(os.Stdout, servername, log.LstdFlags|log.Lshortfile)
-	db, err := general.ConnectToMYSQL(logger, servername, "adminMusicApp:admin@tcp(127.0.0.1:3306)/discography")
+	db, err := server.ConnectToMYSQL(logger, servername, "adminMusicApp:admin@tcp(127.0.0.1:3306)/discography")
 	if err != nil {
 		logger.Printf("Stop starting server")
 		return
 	}
 	defer db.Close()
-	broker, closeBroker := general.ConnectToKafka(logger, servername)
+	broker, closeBroker := server.ConnectToKafka(logger, servername)
 	defer closeBroker()
-	if topicErr := general.CreateTopics(broker, logger, "newArtist", "newSong"); topicErr != nil {
+	if topicErr := server.CreateTopics(broker, logger, "newArtist", "newSong"); topicErr != nil {
 		logger.Fatalf("[ERROR] Failed to create topics due to: %s\n", topicErr)
 	}
 	logger.Printf("Handler is ready for sending get requests")
 	producer := broker.Producer(kafka.NewProducerConf())
-	handler, err := handlers.NewMusicHandler(logger, database.NewMusicDB(db), general.GetSendMessage(producer), nil)
+	handler, err := handlers.NewMusicHandler(logger, database.NewMusicDB(db), server.GetSendMessage(producer), nil)
 	if err != nil {
 		logger.Fatalf("[ERROR] Can't create handler due to: %s\n", err)
 	}

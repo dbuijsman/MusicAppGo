@@ -2,7 +2,8 @@ package handlers
 
 import (
 	"errors"
-	"general"
+	"general/server"
+	"general/types"
 	"log"
 	"net/http"
 	"user_data/database"
@@ -17,8 +18,8 @@ import (
 const servername string = "users"
 
 // NewUserServer returns a new server for userdata and a function that starts up the server
-func NewUserServer(handler *UserHandler, broker *kafka.Broker, servername, port string) (server *http.Server, start func()) {
-	server, _, start = general.NewServer(servername, port, initRoutes(handler), broker, nil, handler.Logger)
+func NewUserServer(handler *UserHandler, broker *kafka.Broker, servername, port string) (newServer *http.Server, start func()) {
+	newServer, _, start = server.NewServer(servername, port, initRoutes(handler), broker, nil, handler.Logger)
 	return
 }
 
@@ -33,7 +34,7 @@ func initRoutes(users *UserHandler) *mux.Router {
 
 	validateRouter := router.PathPrefix("/validate").Subrouter()
 	validateRouter.HandleFunc("/", users.GetRole)
-	validateRouter.Use(general.GetValidateTokenMiddleWare(users.Logger))
+	validateRouter.Use(server.GetValidateTokenMiddleWare(users.Logger))
 	return router
 }
 
@@ -69,14 +70,14 @@ func NewClientCredentials(username, password string) ClientCredentials {
 	return ClientCredentials{Username: username, Password: password}
 }
 
-func (handler *UserHandler) sendToken(creds general.Credentials, response http.ResponseWriter) {
+func (handler *UserHandler) sendToken(creds types.Credentials, response http.ResponseWriter) {
 	if creds.Role == "" {
 		creds.Role = "user"
 	}
-	token, err := general.CreateToken(creds.ID, creds.Username, creds.Role)
+	token, err := server.CreateToken(creds.ID, creds.Username, creds.Role)
 	if err != nil {
 		handler.Logger.Printf("[ERROR] Failed to create valid jwt: %v\n", err.Error())
-		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		server.SendError(response, http.StatusInternalServerError)
 		return
 	}
 	handler.Logger.Printf("Succesfully created token for user: %v\n", creds.Username)

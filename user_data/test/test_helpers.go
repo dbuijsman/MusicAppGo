@@ -1,7 +1,10 @@
 package test
 
 import (
-	"general"
+	"general/dberror"
+	"general/server"
+	"general/testhelpers"
+	"general/types"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -9,14 +12,14 @@ import (
 	"user_data/handlers"
 )
 
-func testServer(t *testing.T, db database.Database) (*http.Server, chan general.Message) {
-	sendMessage, channel := general.TestSendMessage()
-	handler, err := handlers.NewUserHandler(general.TestEmptyLogger(), db, sendMessage)
+func testServer(t *testing.T, db database.Database) (*http.Server, chan testhelpers.Message) {
+	sendMessage, channel := testhelpers.TestSendMessage()
+	handler, err := handlers.NewUserHandler(testhelpers.TestEmptyLogger(), db, sendMessage)
 	if err != nil {
 		t.Fatalf("Failed to create a testServer due to: %s\n", err)
 	}
-	server, _ := handlers.NewUserServer(handler, nil, "user_data_test", "")
-	return server, channel
+	newServer, _ := handlers.NewUserServer(handler, nil, "user_data_test", "")
+	return newServer, channel
 }
 
 type testCredentials struct {
@@ -34,26 +37,26 @@ func newTestDB() testDB {
 
 func (fake testDB) SignUp(username, password string) (int, error) {
 	if _, ok := fake.db[username]; ok {
-		err := general.GetDBError("Dublicate entry", general.DuplicateEntry)
+		err := dberror.GetDBError("Dublicate entry", dberror.DuplicateEntry)
 		return 0, err
 	}
 	id := len(fake.db) + 1
 	fake.db[username] = testCredentials{id: id, username: username, password: password}
 	return id, nil
 }
-func (fake testDB) Login(username, password string) (general.Credentials, error) {
+func (fake testDB) Login(username, password string) (types.Credentials, error) {
 	entry, ok := fake.db[username]
 	if !ok || entry.password != password {
-		return general.Credentials{}, general.GetDBError("The credentials do not match", general.InvalidInput)
+		return types.Credentials{}, dberror.GetDBError("The credentials do not match", dberror.InvalidInput)
 	}
-	return general.NewCredentials(entry.id, entry.username, ""), nil
+	return types.NewCredentials(entry.id, entry.username, ""), nil
 }
-func (fake testDB) FindUser(username string) (general.Credentials, error) {
+func (fake testDB) FindUser(username string) (types.Credentials, error) {
 	user, ok := fake.db[username]
 	if !ok {
-		return general.Credentials{}, general.GetDBError("Can't find user", general.NotFoundError)
+		return types.Credentials{}, dberror.GetDBError("Can't find user", dberror.NotFoundError)
 	}
-	return general.NewCredentials(user.id, user.username, ""), nil
+	return types.NewCredentials(user.id, user.username, ""), nil
 }
 
 type testHandler struct{}
@@ -66,7 +69,7 @@ func testValidateToken(token string) bool {
 	request := httptest.NewRequest("GET", "/", nil)
 	request.Header.Add("Token", token)
 	recorder := httptest.NewRecorder()
-	tokenValidator := general.GetValidateTokenMiddleWare(general.TestEmptyLogger())
+	tokenValidator := server.GetValidateTokenMiddleWare(testhelpers.TestEmptyLogger())
 	tokenValidator(handler).ServeHTTP(recorder, request)
 	return recorder.Code == http.StatusOK
 }

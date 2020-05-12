@@ -1,7 +1,8 @@
 package handlers
 
 import (
-	"general"
+	"general/convert"
+	"general/server"
 	"net/http"
 	"strconv"
 	"sync"
@@ -15,7 +16,7 @@ func (handler *LikesHandler) GetPreferencesOfArtist(response http.ResponseWriter
 	user := mux.Vars(request)["user"]
 	userID, err := strconv.Atoi(user)
 	if err != nil {
-		general.SendError(response, http.StatusBadRequest)
+		server.SendError(response, http.StatusBadRequest)
 		return
 	}
 	handler.Logger.Printf("Received internal call for preferences of artist %v for user #%v\n", nameArtist, userID)
@@ -46,12 +47,12 @@ LOOP:
 	}
 	handler.Logger.Printf("User #%v has %v preferences of songs of artist %v\n", userID, len(results), nameArtist)
 	if len(results) == 0 {
-		general.SendError(response, http.StatusNotFound)
+		server.SendError(response, http.StatusNotFound)
 		return
 	}
 	response.WriteHeader(http.StatusOK)
 	response.Header().Set("Content-Type", "application/json")
-	if err = general.WriteToJSON(&results, response); err != nil {
+	if err = convert.WriteToJSON(&results, response); err != nil {
 		handler.Logger.Printf("[ERROR] %s\n", err)
 	}
 }

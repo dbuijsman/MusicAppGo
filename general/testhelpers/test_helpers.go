@@ -1,8 +1,11 @@
-package general
+package testhelpers
 
 import (
 	"context"
 	"fmt"
+	"general/convert"
+	"general/server"
+	"general/types"
 	"io"
 	"log"
 	"net/http"
@@ -32,7 +35,7 @@ func TestEmptyLogger() *log.Logger {
 func TestRequest(t *testing.T, server *http.Server, method, path, token string, body interface{}) *httptest.ResponseRecorder {
 	bodyRequest, writer := io.Pipe()
 	go func() {
-		err := WriteToJSON(body, writer)
+		err := convert.WriteToJSON(body, writer)
 		if err != nil {
 			t.Fatalf("Error in test helper: %s", err)
 		}
@@ -103,7 +106,7 @@ func TestSendMessageToParticularTopic(wg *sync.WaitGroup, specificTopic string) 
 func TestPostRequest(t *testing.T, handler func(http.ResponseWriter, *http.Request), body interface{}) *httptest.ResponseRecorder {
 	bodyRequest, writer := io.Pipe()
 	go func() {
-		err := WriteToJSON(body, writer)
+		err := convert.WriteToJSON(body, writer)
 		if err != nil {
 			t.Fatalf("Error in test helper: %s", err)
 		}
@@ -119,7 +122,7 @@ func TestPostRequest(t *testing.T, handler func(http.ResponseWriter, *http.Reque
 func TestPostRequestWithContext(t *testing.T, handler func(http.ResponseWriter, *http.Request), body interface{}, contextType, contextValue interface{}) *httptest.ResponseRecorder {
 	bodyRequest, writer := io.Pipe()
 	go func() {
-		err := WriteToJSON(body, writer)
+		err := convert.WriteToJSON(body, writer)
 		if err != nil {
 			t.Fatalf("Error in test helper: %s", err)
 		}
@@ -191,13 +194,13 @@ func TestSendRequestWithPath(t *testing.T, handler func(http.ResponseWriter, *ht
 }
 
 // WithCredentials add the credentials to the request
-func WithCredentials(request *http.Request, creds Credentials) *http.Request {
-	ctx := context.WithValue(request.Context(), Credentials{}, creds)
+func WithCredentials(request *http.Request, creds types.Credentials) *http.Request {
+	ctx := context.WithValue(request.Context(), types.Credentials{}, creds)
 	return request.WithContext(ctx)
 }
 
 // WithOffsetMax add the offset and max value to the request
 func WithOffsetMax(request *http.Request, offset, max int) *http.Request {
-	ctx := context.WithValue(request.Context(), OffsetMax{}, OffsetMax{Offset: offset, Max: max})
+	ctx := context.WithValue(request.Context(), server.OffsetMax{}, server.OffsetMax{Offset: offset, Max: max})
 	return request.WithContext(ctx)
 }

@@ -1,4 +1,4 @@
-package general
+package dberror
 
 // DBError will be the type for returning errors that arise from requests to a database
 type DBError struct {

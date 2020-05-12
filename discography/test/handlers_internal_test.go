@@ -2,7 +2,10 @@ package test
 
 import (
 	"discography/handlers"
-	"general"
+	"general/convert"
+	"general/server"
+	"general/testhelpers"
+	"general/types"
 	"net/http"
 	"strconv"
 	"testing"
@@ -11,17 +14,17 @@ import (
 func TestGetByID_response(t *testing.T) {
 	var internal, user, admin string
 	var err error
-	if internal, err = general.CreateTokenInternalRequests("testServer"); err != nil {
+	if internal, err = server.CreateTokenInternalRequests("testServer"); err != nil {
 		t.Fatalf("Failed to create internal token: %s\n", err)
 	}
-	if user, err = general.CreateToken(1, "test", "user"); err != nil {
+	if user, err = server.CreateToken(1, "test", "user"); err != nil {
 		t.Fatalf("Failed to create user token: %s\n", err)
 	}
-	if admin, err = general.CreateToken(2, "testAdmin", "admin"); err != nil {
+	if admin, err = server.CreateToken(2, "testAdmin", "admin"); err != nil {
 		t.Fatalf("Failed to create admin token: %s\n", err)
 	}
-	var artist general.Artist
-	var song general.Song
+	var artist types.Artist
+	var song types.Song
 	fakeID := -404
 	clientSong := handlers.NewClientSong("Lost in Hollywood", "System of a Down")
 	cases := map[string]struct {
@@ -45,11 +48,11 @@ func TestGetByID_response(t *testing.T) {
 		if artist, err = db.AddArtist(clientSong.Artists[0], "", "link"); err != nil {
 			t.Fatalf("Failed to start test due to failure of adding artist:%s\n", err)
 		}
-		if song, err = db.AddSong(clientSong.Name, []general.Artist{artist}); err != nil {
+		if song, err = db.AddSong(clientSong.Name, []types.Artist{artist}); err != nil {
 			t.Fatalf("Failed to start test due to failure of adding song:%s\n", err)
 		}
-		server, _ := testServerNoRequest(t, db)
-		response := general.TestRequest(t, server, http.MethodGet, test.path+strconv.Itoa(*test.id), test.token, nil)
+		testServer, _ := testServerNoRequest(t, db)
+		response := testhelpers.TestRequest(t, testServer, http.MethodGet, test.path+strconv.Itoa(*test.id), test.token, nil)
 		if response.Code != test.expectedStatusCode {
 			t.Errorf("%v: Expects statuscode: %v but got: %v\n", name, test.expectedStatusCode, response.Code)
 		}
@@ -59,7 +62,7 @@ func TestGetByID_response(t *testing.T) {
 		var result struct {
 			ID int
 		}
-		if err := general.ReadFromJSON(&result, response.Body); err != nil {
+		if err := convert.ReadFromJSON(&result, response.Body); err != nil {
 			t.Errorf("[ERROR] %v: Decoding response: %v\n", name, err)
 			continue
 		}

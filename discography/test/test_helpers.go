@@ -3,7 +3,9 @@ package test
 import (
 	"discography/database"
 	"discography/handlers"
-	"general"
+	"general/dberror"
+	"general/testhelpers"
+	"general/types"
 	"math"
 	"net/http"
 	"sort"
@@ -11,15 +13,15 @@ import (
 	"testing"
 )
 
-func testServerNoRequest(t *testing.T, db database.Database) (*http.Server, chan general.Message) {
+func testServerNoRequest(t *testing.T, db database.Database) (*http.Server, chan testhelpers.Message) {
 	handler, channel := testMusicHandlerNoRequest(t, db)
-	server, _ := handlers.NewMusicServer(handler, nil, "music_test", "")
-	return server, channel
+	testServer, _ := handlers.NewMusicServer(handler, nil, "music_test", "")
+	return testServer, channel
 }
 
-func testMusicHandlerNoRequest(t *testing.T, db database.Database) (*handlers.MusicHandler, chan general.Message) {
-	logger := general.TestEmptyLogger()
-	sendMessage, channel := general.TestSendMessage()
+func testMusicHandlerNoRequest(t *testing.T, db database.Database) (*handlers.MusicHandler, chan testhelpers.Message) {
+	logger := testhelpers.TestEmptyLogger()
+	sendMessage, channel := testhelpers.TestSendMessage()
 	get := func(url string) (*http.Response, error) {
 		response := http.Response{StatusCode: http.StatusNotImplemented}
 		return &response, nil
@@ -45,12 +47,12 @@ func testAddDiscographyToDB(t *testing.T, db database.Database, discography map[
 
 type testDB struct {
 	artistsDB map[string]testArtist
-	songsDB   map[string]map[string]general.Song
+	songsDB   map[string]map[string]types.Song
 	lastID    int
 }
 
 func newTestDB() testDB {
-	return testDB{artistsDB: make(map[string]testArtist), songsDB: make(map[string]map[string]general.Song)}
+	return testDB{artistsDB: make(map[string]testArtist), songsDB: make(map[string]map[string]types.Song)}
 }
 
 type testArtist struct {
@@ -58,9 +60,9 @@ type testArtist struct {
 	name, prefix, linkSpotify string
 }
 
-func (fake testDB) GetArtistsStartingWithLetter(startLetter string, offset, max int) ([]general.Artist, error) {
+func (fake testDB) GetArtistsStartingWithLetter(startLetter string, offset, max int) ([]types.Artist, error) {
 	if max <= 0 || offset < 0 {
-		return nil, general.GetDBError("Can not search with negative offset or non-positive max", general.InvalidOffsetMax)
+		return nil, dberror.GetDBError("Can not search with negative offset or non-positive max", dberror.InvalidOffsetMax)
 	}
 	allResults := make([]string, 0, max)
 	for artist := range fake.artistsDB {
@@ -69,16 +71,16 @@ func (fake testDB) GetArtistsStartingWithLetter(startLetter string, offset, max 
 		}
 	}
 	sort.Strings(allResults)
-	searchResults := make([]general.Artist, 0, max)
+	searchResults := make([]types.Artist, 0, max)
 	for indexResult := offset; indexResult < int(math.Min(float64(offset+max), float64(len(allResults)))); indexResult++ {
 		foundArtist := fake.artistsDB[allResults[indexResult]]
-		searchResults = append(searchResults, general.NewArtist(foundArtist.id, foundArtist.name, foundArtist.prefix))
+		searchResults = append(searchResults, types.NewArtist(foundArtist.id, foundArtist.name, foundArtist.prefix))
 	}
 	return searchResults, nil
 }
-func (fake testDB) GetArtistsStartingWithNumber(offset, max int) ([]general.Artist, error) {
+func (fake testDB) GetArtistsStartingWithNumber(offset, max int) ([]types.Artist, error) {
 	if max <= 0 || offset < 0 {
-		return nil, general.GetDBError("Can not search with negative offset or non-positive max", general.InvalidOffsetMax)
+		return nil, dberror.GetDBError("Can not search with negative offset or non-positive max", dberror.InvalidOffsetMax)
 	}
 	allResults := make([]string, 0, max)
 	for artist := range fake.artistsDB {
@@ -87,18 +89,18 @@ func (fake testDB) GetArtistsStartingWithNumber(offset, max int) ([]general.Arti
 		}
 	}
 	sort.Strings(allResults)
-	searchResults := make([]general.Artist, 0, max)
+	searchResults := make([]types.Artist, 0, max)
 	for indexResult := offset; indexResult < int(math.Min(float64(offset+max), float64(len(allResults)))); indexResult++ {
 		foundArtist := fake.artistsDB[allResults[indexResult]]
-		searchResults = append(searchResults, general.NewArtist(foundArtist.id, foundArtist.name, foundArtist.prefix))
+		searchResults = append(searchResults, types.NewArtist(foundArtist.id, foundArtist.name, foundArtist.prefix))
 	}
 	return searchResults, nil
 
 }
 
-func (fake testDB) GetSongsFromArtist(artist string, offset, max int) ([]general.Song, error) {
+func (fake testDB) GetSongsFromArtist(artist string, offset, max int) ([]types.Song, error) {
 	if max <= 0 || offset < 0 {
-		return nil, general.GetDBError("Can not search with negative offset or non-positive max", general.InvalidOffsetMax)
+		return nil, dberror.GetDBError("Can not search with negative offset or non-positive max", dberror.InvalidOffsetMax)
 	}
 	discography := fake.songsDB[artist]
 	songNames := make([]string, 0, len(discography))
@@ -106,7 +108,7 @@ func (fake testDB) GetSongsFromArtist(artist string, offset, max int) ([]general
 		songNames = append(songNames, song)
 	}
 	sort.Strings(songNames)
-	searchResults := make([]general.Song, 0, max)
+	searchResults := make([]types.Song, 0, max)
 	for indexResult := offset; indexResult < int(math.Min(float64(offset+max), float64(len(songNames)))); indexResult++ {
 		searchResults = append(searchResults, discography[songNames[indexResult]])
 
@@ -114,36 +116,36 @@ func (fake testDB) GetSongsFromArtist(artist string, offset, max int) ([]general
 	return searchResults, nil
 }
 
-func (fake testDB) FindArtistByName(name string) (general.Artist, error) {
+func (fake testDB) FindArtistByName(name string) (types.Artist, error) {
 	artist, ok := fake.artistsDB[name]
 	if !ok {
-		return general.Artist{}, general.GetDBError("Not found", general.NotFoundError)
+		return types.Artist{}, dberror.GetDBError("Not found", dberror.NotFoundError)
 	}
-	return general.NewArtist(artist.id, artist.name, artist.prefix), nil
+	return types.NewArtist(artist.id, artist.name, artist.prefix), nil
 }
 
-func (fake testDB) FindSongByName(artist, song string) (general.Song, error) {
+func (fake testDB) FindSongByName(artist, song string) (types.Song, error) {
 	discography, ok := fake.songsDB[artist]
 	if !ok {
-		return general.Song{}, general.GetDBError("Not found", general.NotFoundError)
+		return types.Song{}, dberror.GetDBError("Not found", dberror.NotFoundError)
 	}
 	songData, okSong := discography[song]
 	if !okSong {
-		return general.Song{}, general.GetDBError("Not found", general.NotFoundError)
+		return types.Song{}, dberror.GetDBError("Not found", dberror.NotFoundError)
 	}
 	return songData, nil
 }
 
-func (fake testDB) FindArtistByID(artistID int) (general.Artist, error) {
+func (fake testDB) FindArtistByID(artistID int) (types.Artist, error) {
 	for _, artist := range fake.artistsDB {
 		if artist.id == artistID {
-			return general.NewArtist(artist.id, artist.name, artist.prefix), nil
+			return types.NewArtist(artist.id, artist.name, artist.prefix), nil
 		}
 	}
-	return general.Artist{}, general.GetDBError("Not found", general.NotFoundError)
+	return types.Artist{}, dberror.GetDBError("Not found", dberror.NotFoundError)
 }
 
-func (fake testDB) FindSongByID(songID int) (general.Song, error) {
+func (fake testDB) FindSongByID(songID int) (types.Song, error) {
 	for _, discography := range fake.songsDB {
 		for _, song := range discography {
 			if song.ID == songID {
@@ -151,39 +153,39 @@ func (fake testDB) FindSongByID(songID int) (general.Song, error) {
 			}
 		}
 	}
-	return general.Song{}, general.GetDBError("Not found", general.NotFoundError)
+	return types.Song{}, dberror.GetDBError("Not found", dberror.NotFoundError)
 }
 
-func (fake testDB) AddArtist(artist, prefix, linkSpotify string) (general.Artist, error) {
+func (fake testDB) AddArtist(artist, prefix, linkSpotify string) (types.Artist, error) {
 	if len(artist) == 0 {
-		return general.Artist{}, general.GetDBError("Missing name", general.InvalidInput)
+		return types.Artist{}, dberror.GetDBError("Missing name", dberror.InvalidInput)
 	}
 	if _, ok := fake.artistsDB[artist]; ok {
-		return general.Artist{}, general.GetDBError("Duplicate artist", general.DuplicateEntry)
+		return types.Artist{}, dberror.GetDBError("Duplicate artist", dberror.DuplicateEntry)
 	}
 	newArtist := testArtist{id: len(fake.artistsDB) + 1, name: artist, prefix: prefix, linkSpotify: linkSpotify}
 	fake.artistsDB[artist] = newArtist
-	fake.songsDB[artist] = make(map[string]general.Song)
-	return general.NewArtist(newArtist.id, newArtist.name, newArtist.prefix), nil
+	fake.songsDB[artist] = make(map[string]types.Song)
+	return types.NewArtist(newArtist.id, newArtist.name, newArtist.prefix), nil
 }
 
-func (fake testDB) AddSong(song string, artists []general.Artist) (general.Song, error) {
+func (fake testDB) AddSong(song string, artists []types.Artist) (types.Song, error) {
 	if len(song) == 0 {
-		return general.Song{}, general.GetDBError("Missing name", general.InvalidInput)
+		return types.Song{}, dberror.GetDBError("Missing name", dberror.InvalidInput)
 	}
 	if len(artists) == 0 {
-		return general.Song{}, general.GetDBError("No artists is given for adding a song", general.InvalidInput)
+		return types.Song{}, dberror.GetDBError("No artists is given for adding a song", dberror.InvalidInput)
 	}
 	for _, artist := range artists {
 		if _, ok := fake.songsDB[artist.Name]; !ok {
-			return general.Song{}, general.GetDBError("Artist doesn't exist", general.UnknownError)
+			return types.Song{}, dberror.GetDBError("Artist doesn't exist", dberror.UnknownError)
 		}
 		if _, ok := fake.songsDB[artist.Name][song]; ok {
-			return general.Song{}, general.GetDBError("Duplicate entry", general.DuplicateEntry)
+			return types.Song{}, dberror.GetDBError("Duplicate entry", dberror.DuplicateEntry)
 		}
 	}
 	songID := artists[0].ID*10 + len(fake.songsDB[artists[0].Name])
-	newSong := general.Song{ID: songID, Name: song, Artists: artists}
+	newSong := types.Song{ID: songID, Name: song, Artists: artists}
 	for _, artist := range artists {
 		fake.songsDB[artist.Name][song] = newSong
 	}

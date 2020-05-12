@@ -1,7 +1,8 @@
 package test
 
 import (
-	"general"
+	"general/convert"
+	"general/types"
 	"testing"
 )
 
@@ -19,8 +20,8 @@ func TestAddUser_saveInDB(t *testing.T) {
 	for name, test := range cases {
 		db := newTestDB()
 		handler := testLikesHandler(db, nil)
-		creds := general.NewCredentials(test.id, test.username, test.role)
-		credsString, err := general.ToJSONBytes(creds)
+		creds := types.NewCredentials(test.id, test.username, test.role)
+		credsString, err := convert.ToJSONBytes(creds)
 		if err != nil {
 			t.Errorf("%v: Can't serialize %v due to: %s\n", name, creds, err)
 			continue
@@ -46,8 +47,8 @@ func TestAddArtist_saveInDB(t *testing.T) {
 	for name, test := range cases {
 		db := newTestDB()
 		handler := testLikesHandler(db, nil)
-		artist := general.NewArtist(test.id, test.name, test.prefix)
-		artistString, err := general.ToJSONBytes(artist)
+		artist := types.NewArtist(test.id, test.name, test.prefix)
+		artistString, err := convert.ToJSONBytes(artist)
 		if err != nil {
 			t.Errorf("%v: Can't serialize %v due to: %s\n", name, artist, err)
 			continue
@@ -60,31 +61,31 @@ func TestAddArtist_saveInDB(t *testing.T) {
 }
 
 func TestAddSong_saveInDB(t *testing.T) {
-	existingArtist := general.NewArtist(1, "Lost Frequencies", "")
+	existingArtist := types.NewArtist(1, "Lost Frequencies", "")
 	cases := map[string]struct {
 		id                int
-		artists           []general.Artist
+		artists           []types.Artist
 		name              string
 		expectedSavedInDB bool
 	}{
-		"No valid id":                        {0, []general.Artist{general.NewArtist(2, "Miike Snow", "")}, "Genghis Khan", false},
-		"No artist":                          {1, []general.Artist{}, "Paint It Black", false},
-		"No song":                            {1, []general.Artist{general.NewArtist(2, "Miike Snow", "")}, "", false},
-		"Complete data with existing artist": {1, []general.Artist{existingArtist}, "Reality", true},
-		"Complete data with new artist":      {1, []general.Artist{general.NewArtist(2, "Miike Snow", "")}, "Genghis Khan", true},
-		"Complete data with new artist and existing artist": {1, []general.Artist{general.NewArtist(2, "Zonderling", ""), existingArtist}, "Crazy", true},
+		"No valid id":                        {0, []types.Artist{types.NewArtist(2, "Miike Snow", "")}, "Genghis Khan", false},
+		"No artist":                          {1, []types.Artist{}, "Paint It Black", false},
+		"No song":                            {1, []types.Artist{types.NewArtist(2, "Miike Snow", "")}, "", false},
+		"Complete data with existing artist": {1, []types.Artist{existingArtist}, "Reality", true},
+		"Complete data with new artist":      {1, []types.Artist{types.NewArtist(2, "Miike Snow", "")}, "Genghis Khan", true},
+		"Complete data with new artist and existing artist": {1, []types.Artist{types.NewArtist(2, "Zonderling", ""), existingArtist}, "Crazy", true},
 	}
 	for name, test := range cases {
 		db := newTestDB()
 		handler := testLikesHandler(db, nil)
-		existingArtistString, err := general.ToJSONBytes(existingArtist)
+		existingArtistString, err := convert.ToJSONBytes(existingArtist)
 		handler.ConsumeNewArtist(existingArtistString)
 		if err != nil {
 			t.Errorf("%v: Can't serialize %v due to: %s\n", name, existingArtist, err)
 			continue
 		}
-		song := general.NewSong(test.id, test.artists, test.name)
-		songString, err := general.ToJSONBytes(song)
+		song := types.NewSong(test.id, test.artists, test.name)
+		songString, err := convert.ToJSONBytes(song)
 		if err != nil {
 			t.Errorf("%v: Can't serialize %v due to: %s\n", name, song, err)
 			continue

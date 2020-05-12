@@ -1,7 +1,7 @@
 package main
 
 import (
-	"general"
+	"general/server"
 	"likes/database"
 	"likes/handlers"
 	"log"
@@ -18,13 +18,13 @@ const servername string = "likes"
 
 func main() {
 	logger := log.New(os.Stdout, servername, log.LstdFlags|log.Lshortfile)
-	db, err := general.ConnectToMYSQL(logger, servername, "likesMusicApp:likelikes@tcp(127.0.0.1:3306)/pref_likes")
+	db, err := server.ConnectToMYSQL(logger, servername, "likesMusicApp:likelikes@tcp(127.0.0.1:3306)/pref_likes")
 	if err != nil {
 		logger.Printf("Stop starting server")
 		return
 	}
 	defer db.Close()
-	broker, closeBroker := general.ConnectToKafka(logger, servername)
+	broker, closeBroker := server.ConnectToKafka(logger, servername)
 	defer closeBroker()
 	logger.Printf("Handler is ready for sending get requests")
 	handler := handlers.NewLikesHandler(logger, database.NewLikesDB(db), nil)
@@ -38,10 +38,10 @@ func initRoutes(handler *handlers.LikesHandler) *mux.Router {
 	router.Handle("/metrics", promhttp.Handler())
 
 	clientR := router.PathPrefix("/api").Subrouter()
-	clientR.Use(general.GetValidateTokenMiddleWare(handler.Logger))
+	clientR.Use(server.GetValidateTokenMiddleWare(handler.Logger))
 
 	getR := clientR.Methods(http.MethodGet).Subrouter()
-	getR.Use(general.GetOffsetMaxMiddleware(handler.Logger))
+	getR.Use(server.GetOffsetMaxMiddleware(handler.Logger))
 	getR.PathPrefix("/like").HandlerFunc(handler.GetLikes)
 	getR.PathPrefix("/dislike").HandlerFunc(handler.GetDislikes)
 
@@ -54,7 +54,7 @@ func initRoutes(handler *handlers.LikesHandler) *mux.Router {
 	dislikesR.Methods(http.MethodDelete).HandlerFunc(handler.RemoveDislike)
 
 	internalR := router.PathPrefix("/intern").Methods(http.MethodGet).Subrouter()
-	internalR.Use(general.GetInternalRequestMiddleware(handler.Logger))
+	internalR.Use(server.GetInternalRequestMiddleware(handler.Logger))
 	internalR.Path("/preference/{user}/{artist}").HandlerFunc(handler.GetPreferencesOfArtist)
 	return router
 }

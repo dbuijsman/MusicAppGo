@@ -1,4 +1,4 @@
-package general
+package types
 
 // Service contains the name and address of a microservce. This type will be used for sharing this data with the services
 type Service struct {

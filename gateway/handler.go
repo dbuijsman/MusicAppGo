@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"errors"
-	"general"
+	"general/convert"
+	"general/server"
+	"general/types"
 	"io"
 	"log"
 	"net/http"
@@ -13,9 +15,9 @@ import (
 )
 
 // NewGatewayServer returns a new server that will be functioning as a API gateway and a function that starts up the server
-func NewGatewayServer(handler *GatewayHandler, broker *kafka.Broker, servername, port string) (server *http.Server, start func()) {
-	s, channel, startServer := general.NewServer(servername, port, initRoutes(handler), broker, nil, handler.logger)
-	server = s
+func NewGatewayServer(handler *GatewayHandler, broker *kafka.Broker, servername, port string) (newServer *http.Server, start func()) {
+	s, channel, startServer := server.NewServer(servername, port, initRoutes(handler), broker, nil, handler.logger)
+	newServer = s
 	start = func() {
 		go func() {
 			for service := range channel {
@@ -41,7 +43,7 @@ func initRoutes(handler *GatewayHandler) *mux.Router {
 	router.HandleFunc("/admin/song", handler.redirect("discography"))
 
 	internRouter := router.PathPrefix("/intern").Methods(http.MethodGet).Subrouter()
-	internRouter.Use(general.GetInternalRequestMiddleware(handler.logger))
+	internRouter.Use(server.GetInternalRequestMiddleware(handler.logger))
 	internRouter.HandleFunc("/service", handler.getServices)
 
 	return router
@@ -53,7 +55,7 @@ type GatewayHandler struct {
 	logger      *log.Logger
 	client      http.Client
 	sendMessage func(string, []byte) error
-	services    map[string]general.Service
+	services    map[string]types.Service
 }
 
 // NewGatewayHandler returns a GatewayHandler with the given data.
@@ -62,14 +64,14 @@ func NewGatewayHandler(logger *log.Logger, client http.Client, sendMessage func(
 	if sendMessage == nil {
 		return nil, errors.New("sendMessage can't be nil")
 	}
-	return &GatewayHandler{logger: logger, client: client, sendMessage: sendMessage, services: make(map[string]general.Service)}, nil
+	return &GatewayHandler{logger: logger, client: client, sendMessage: sendMessage, services: make(map[string]types.Service)}, nil
 }
 func (handler *GatewayHandler) redirect(serviceName string) func(http.ResponseWriter, *http.Request) {
 	return func(response http.ResponseWriter, request *http.Request) {
 		service, ok := handler.services[serviceName]
 		if !ok {
 			handler.logger.Printf("Failed to redirect request due to missing service: %v\n", serviceName)
-			general.SendError(response, http.StatusInternalServerError)
+			server.SendError(response, http.StatusInternalServerError)
 			return
 		}
 		cookie, cookieErr := request.Cookie("token")
@@ -91,13 +93,13 @@ func (handler *GatewayHandler) redirect(serviceName string) func(http.ResponseWr
 		}
 		if err != nil {
 			handler.logger.Printf("Failed to create request: %s\n", err)
-			general.SendError(response, http.StatusInternalServerError)
+			server.SendError(response, http.StatusInternalServerError)
 			return
 		}
 		resp, err := handler.client.Do(req)
 		if err != nil {
 			handler.logger.Printf("Failed to redirect request: %s\n", err)
-			general.SendError(response, http.StatusInternalServerError)
+			server.SendError(response, http.StatusInternalServerError)
 			return
 		}
 		response.WriteHeader(resp.StatusCode)
@@ -111,7 +113,7 @@ func (handler *GatewayHandler) redirect(serviceName string) func(http.ResponseWr
 func (handler *GatewayHandler) getServices(response http.ResponseWriter, request *http.Request) {
 	response.Header().Set("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)
-	err := general.WriteToJSON(&handler.services, response)
+	err := convert.WriteToJSON(&handler.services, response)
 	if err != nil {
 		handler.logger.Printf("[ERROR] %s\n", err)
 	}

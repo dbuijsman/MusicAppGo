@@ -3,7 +3,10 @@ package handlers
 import (
 	"bytes"
 	"fmt"
-	"general"
+	"general/convert"
+	"general/dberror"
+	"general/server"
+	"general/types"
 	"net/http"
 )
 
@@ -11,12 +14,12 @@ func (handler *LikesHandler) obtainSongOrSendError(response http.ResponseWriter,
 	resp, err := handler.GETRequest(fmt.Sprintf("http://localhost%v/intern/song/%v", portDiscography, songID))
 	if resp.StatusCode == http.StatusNotFound {
 		handler.Logger.Printf("Song #%v doesn't exist!\n", songID)
-		general.SendError(response, http.StatusNotFound)
+		server.SendError(response, http.StatusNotFound)
 		return true
 	}
 	if err != nil || resp.StatusCode != http.StatusOK {
 		handler.Logger.Printf("Failed to obtain song #%v from discography: %s\n", songID, err)
-		general.SendError(response, http.StatusInternalServerError)
+		server.SendError(response, http.StatusInternalServerError)
 		return true
 	}
 	handler.Logger.Printf("Found missing song #%v from discography service\n", songID)
@@ -28,12 +31,12 @@ func (handler *LikesHandler) obtainSongOrSendError(response http.ResponseWriter,
 
 // AddLike adds a new like to the database and it deletes a potential dislike to the same song.
 func (handler *LikesHandler) AddLike(response http.ResponseWriter, request *http.Request) {
-	user := request.Context().Value(general.Credentials{}).(general.Credentials)
-	var newPref general.Preference
-	if err := general.ReadFromJSON(&newPref, request.Body); err != nil {
+	user := request.Context().Value(types.Credentials{}).(types.Credentials)
+	var newPref types.Preference
+	if err := convert.ReadFromJSON(&newPref, request.Body); err != nil {
 		badRequests.Inc()
 		handler.Logger.Printf("Got invalid request: %v\n", err)
-		general.SendError(response, http.StatusBadRequest)
+		server.SendError(response, http.StatusBadRequest)
 		return
 	}
 	handler.Logger.Printf("Received call for new like of user #%v and song #%v\n", user.ID, newPref.ID)
@@ -53,16 +56,16 @@ func (handler *LikesHandler) AddLike(response http.ResponseWriter, request *http
 		response.Write([]byte(http.StatusText(http.StatusOK)))
 		return
 	}
-	if err.(general.DBError).ErrorCode == general.DuplicateEntry {
+	if err.(dberror.DBError).ErrorCode == dberror.DuplicateEntry {
 		handler.Logger.Printf("Like for user#%v and song #%v already exists\n", user.ID, newPref.ID)
 		response.WriteHeader(http.StatusOK)
 		response.Write([]byte(http.StatusText(http.StatusOK)))
 		return
 	}
 	// If err gives an unexpected error, then we will send internal server error
-	if err.(general.DBError).ErrorCode != general.MissingForeignKey {
+	if err.(dberror.DBError).ErrorCode != dberror.MissingForeignKey {
 		handler.Logger.Printf("[ERROR] Failed to add new like for user #%v and song #%v: %s\n", user.ID, newPref.ID, err)
-		general.SendError(response, http.StatusInternalServerError)
+		server.SendError(response, http.StatusInternalServerError)
 		return
 	}
 	handler.Logger.Printf("Can't add like for user #%v and song #%v. Trying to add user and song\n", user.ID, newPref.ID)
@@ -74,15 +77,15 @@ func (handler *LikesHandler) AddLike(response http.ResponseWriter, request *http
 		return
 	}
 	errAddUser := <-channelAddUser
-	if errAddUser != nil && errAddUser.(general.DBError).ErrorCode != general.DuplicateEntry {
+	if errAddUser != nil && errAddUser.(dberror.DBError).ErrorCode != dberror.DuplicateEntry {
 		handler.Logger.Printf("[ERROR] Failed to add new user %v: %s\n", user.Username, errAddUser)
-		general.SendError(response, http.StatusInternalServerError)
+		server.SendError(response, http.StatusInternalServerError)
 		return
 	}
 	err = handler.db.AddLike(user.ID, newPref.ID)
 	if err != nil {
 		handler.Logger.Printf("[ERROR] Failed to add new like for user #%v and song #%v after adding missing data: %s\n", user.ID, newPref.ID, err)
-		general.SendError(response, http.StatusInternalServerError)
+		server.SendError(response, http.StatusInternalServerError)
 		return
 
 	}
@@ -93,12 +96,12 @@ func (handler *LikesHandler) AddLike(response http.ResponseWriter, request *http
 
 // AddDislike adds a new dislike to the database and it deletes a potential like to the same song.
 func (handler *LikesHandler) AddDislike(response http.ResponseWriter, request *http.Request) {
-	user := request.Context().Value(general.Credentials{}).(general.Credentials)
-	var newPref general.Preference
-	if err := general.ReadFromJSON(&newPref, request.Body); err != nil {
+	user := request.Context().Value(types.Credentials{}).(types.Credentials)
+	var newPref types.Preference
+	if err := convert.ReadFromJSON(&newPref, request.Body); err != nil {
 		badRequests.Inc()
 		handler.Logger.Printf("Got invalid request: %v\n", err)
-		general.SendError(response, http.StatusBadRequest)
+		server.SendError(response, http.StatusBadRequest)
 		return
 	}
 	handler.Logger.Printf("Received call for new dislike of user #%v and song #%v\n", user.ID, newPref.ID)
@@ -118,16 +121,16 @@ func (handler *LikesHandler) AddDislike(response http.ResponseWriter, request *h
 		response.Write([]byte(http.StatusText(http.StatusOK)))
 		return
 	}
-	if err.(general.DBError).ErrorCode == general.DuplicateEntry {
+	if err.(dberror.DBError).ErrorCode == dberror.DuplicateEntry {
 		handler.Logger.Printf("Dislike for user#%v and song #%v already exists\n", user.ID, newPref.ID)
 		response.WriteHeader(http.StatusOK)
 		response.Write([]byte(http.StatusText(http.StatusOK)))
 		return
 	}
 	// If err gives an unexpected error, then we will send internal server error
-	if err.(general.DBError).ErrorCode != general.MissingForeignKey {
+	if err.(dberror.DBError).ErrorCode != dberror.MissingForeignKey {
 		handler.Logger.Printf("[ERROR] Failed to add new dislike for user #%v and song #%v: %s\n", user.ID, newPref.ID, err)
-		general.SendError(response, http.StatusInternalServerError)
+		server.SendError(response, http.StatusInternalServerError)
 		return
 	}
 	handler.Logger.Printf("Can't add dislike for user #%v and song #%v. Trying to add user and song\n", user.ID, newPref.ID)
@@ -139,15 +142,15 @@ func (handler *LikesHandler) AddDislike(response http.ResponseWriter, request *h
 		return
 	}
 	errAddUser := <-channelAddUser
-	if errAddUser != nil && errAddUser.(general.DBError).ErrorCode != general.DuplicateEntry {
+	if errAddUser != nil && errAddUser.(dberror.DBError).ErrorCode != dberror.DuplicateEntry {
 		handler.Logger.Printf("[ERROR] Failed to add new user %v: %s\n", user.Username, errAddUser)
-		general.SendError(response, http.StatusInternalServerError)
+		server.SendError(response, http.StatusInternalServerError)
 		return
 	}
 	err = handler.db.AddDislike(user.ID, newPref.ID)
 	if err != nil {
 		handler.Logger.Printf("[ERROR] Failed to add new dislike for user #%v and song #%v after adding missing data: %s\n", user.ID, newPref.ID, err)
-		general.SendError(response, http.StatusInternalServerError)
+		server.SendError(response, http.StatusInternalServerError)
 		return
 
 	}

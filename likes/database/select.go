@@ -1,34 +1,35 @@
 package database
 
 import (
-	"general"
+	"general/dberror"
+	"general/types"
 	"log"
 	"sync"
 )
 
 //GetLikes finds liked songs of the given user ordered by name of the song.
-func (db *LikesDB) GetLikes(userID, offset, max int) ([]general.Song, error) {
+func (db *LikesDB) GetLikes(userID, offset, max int) ([]types.Song, error) {
 	if max <= 0 || offset < 0 {
-		return nil, general.GetDBError("Can not search with negative offset or non-positive max", general.InvalidOffsetMax)
+		return nil, dberror.GetDBError("Can not search with negative offset or non-positive max", dberror.InvalidOffsetMax)
 	}
 	// This query is a cross join between artists, discography and a subquery that selects the likes from an user
 	results, err := db.database.Query("SELECT artists.id, name_artist, prefix, discography.song_id, name_song FROM artists, discography CROSS JOIN (SELECT liked_songs.song_id, name_song FROM liked_songs, songs, discography, artists WHERE user_id=? AND liked_songs.song_id=songs.id AND songs.id=discography.song_id AND discography.artist_id=artists.id GROUP BY liked_songs.song_id ORDER BY min(name_artist),min(name_song) LIMIT ?,?) AS likes ON discography.song_id=likes.song_id WHERE artists.id=artist_id ORDER BY name_song;", userID, offset, max)
 	if err != nil {
-		return nil, general.ErrorToUnknownDBError(err)
+		return nil, dberror.ErrorToUnknownDBError(err)
 	}
 	defer results.Close()
 	return scanSongs(results, "like")
 }
 
 //GetDislikes finds disliked songs of the given user ordered by name of the song.
-func (db *LikesDB) GetDislikes(userID, offset, max int) ([]general.Song, error) {
+func (db *LikesDB) GetDislikes(userID, offset, max int) ([]types.Song, error) {
 	if max <= 0 || offset < 0 {
-		return nil, general.GetDBError("Can not search with negative offset or non-positive max", general.InvalidOffsetMax)
+		return nil, dberror.GetDBError("Can not search with negative offset or non-positive max", dberror.InvalidOffsetMax)
 	}
 	// This query is a cross join between artists, discography and a subquery that selects the dislikes from an user
 	results, err := db.database.Query("SELECT artists.id, name_artist, prefix, discography.song_id, name_song FROM artists, discography CROSS JOIN (SELECT disliked_songs.song_id, name_song FROM disliked_songs, songs, discography, artists WHERE user_id=? AND disliked_songs.song_id=songs.id AND songs.id=discography.song_id AND discography.artist_id=artists.id GROUP BY disliked_songs.song_id ORDER BY min(name_artist),min(name_song) LIMIT ?,?) AS dislikes ON discography.song_id=dislikes.song_id WHERE artists.id=artist_id ORDER BY name_song;", userID, offset, max)
 	if err != nil {
-		return nil, general.ErrorToUnknownDBError(err)
+		return nil, dberror.ErrorToUnknownDBError(err)
 	}
 	defer results.Close()
 	return scanSongs(results, "dislike")

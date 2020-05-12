@@ -1,8 +1,9 @@
-package general
+package server
 
 import (
 	"errors"
 	"fmt"
+	"general/types"
 	"strconv"
 	"time"
 
@@ -40,21 +41,21 @@ func CreateTokenInternalRequests(servername string) (string, error) {
 	return CreateToken(-1, servername, RoleInternal)
 }
 
-func validateToken(tokenString string) (Credentials, error) {
+func validateToken(tokenString string) (types.Credentials, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return Credentials{}, errors.New("invalid signing method")
+			return types.Credentials{}, errors.New("invalid signing method")
 		}
 		return key, nil
 	})
 	if err != nil || !token.Valid {
-		return Credentials{}, fmt.Errorf("[WARNING] Invalid token: %v", err)
+		return types.Credentials{}, fmt.Errorf("[WARNING] Invalid token: %v", err)
 	}
 	claims := token.Claims.(jwt.MapClaims)
 	id, convError := strconv.Atoi(claims["jti"].(string))
 	if convError != nil && claims["jti"].(string) != "" {
-		return Credentials{}, fmt.Errorf("[WARNING] Received signed token with invalid id: %v", convError)
+		return types.Credentials{}, fmt.Errorf("[WARNING] Received signed token with invalid id: %v", convError)
 	}
-	tokenContext := Credentials{ID: id, Username: claims["iss"].(string), Role: claims["aud"].(string)}
+	tokenContext := types.Credentials{ID: id, Username: claims["iss"].(string), Role: claims["aud"].(string)}
 	return tokenContext, nil
 }
