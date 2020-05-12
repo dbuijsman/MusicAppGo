@@ -31,7 +31,6 @@ jobs:
     - name: Build
       run: |
         cd gateway && go build . && cd ..
-        cd general && go build . && cd ..
         cd user_data && go build . && cd ..
         cd discography && go build && cd ..
         cd likes && go build && cd ..
