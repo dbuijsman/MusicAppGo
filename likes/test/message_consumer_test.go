@@ -19,7 +19,7 @@ func TestAddUser_saveInDB(t *testing.T) {
 	}
 	for name, test := range cases {
 		db := newTestDB()
-		handler := testLikesHandler(db, nil)
+		handler := testLikesHandler(t, db, nil)
 		creds := types.NewCredentials(test.id, test.username, test.role)
 		credsString, err := convert.ToJSONBytes(creds)
 		if err != nil {
@@ -46,7 +46,7 @@ func TestAddArtist_saveInDB(t *testing.T) {
 	}
 	for name, test := range cases {
 		db := newTestDB()
-		handler := testLikesHandler(db, nil)
+		handler := testLikesHandler(t, db, nil)
 		artist := types.NewArtist(test.id, test.name, test.prefix)
 		artistString, err := convert.ToJSONBytes(artist)
 		if err != nil {
@@ -77,7 +77,7 @@ func TestAddSong_saveInDB(t *testing.T) {
 	}
 	for name, test := range cases {
 		db := newTestDB()
-		handler := testLikesHandler(db, nil)
+		handler := testLikesHandler(t, db, nil)
 		existingArtistString, err := convert.ToJSONBytes(existingArtist)
 		handler.ConsumeNewArtist(existingArtistString)
 		if err != nil {

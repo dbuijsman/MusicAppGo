@@ -62,7 +62,7 @@ func TestGetHandlers_response(t *testing.T) {
 		db.addPreferencesToTestDB(t, user.ID, likedSongs, db.AddLike)
 		db.addPreferencesToTestDB(t, user.ID, dislikedSongs, db.AddDislike)
 		db.addSongsToTestDB(t, otherSongs)
-		testServer := testServer(db, addDBToArray(make([]types.Song, 0), db))
+		testServer := testServer(t, db, addDBToArray(make([]types.Song, 0), db))
 		token := ""
 		if test.credentials != nil {
 			var err error
@@ -139,7 +139,7 @@ func TestGetHandlers_orderResults(t *testing.T) {
 		db.addPreferencesToTestDB(t, user.ID, likedSongs, db.AddLike)
 		db.addPreferencesToTestDB(t, user.ID, dislikedSongs, db.AddDislike)
 		db.addSongsToTestDB(t, otherSongs)
-		testServer := testServer(db, addDBToArray(make([]types.Song, 0), db))
+		testServer := testServer(t, db, addDBToArray(make([]types.Song, 0), db))
 		response := testhelpers.TestRequest(t, testServer, http.MethodGet, test.path, token, nil)
 		if response.Code != http.StatusOK {
 			t.Errorf("%v: Expects statuscode %v but got: %v\n", name, http.StatusOK, response.Code)

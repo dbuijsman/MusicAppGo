@@ -56,7 +56,7 @@ func TestInternal_response(t *testing.T) {
 		db.addPreferencesToTestDB(t, user.ID, likedSongs, db.AddLike)
 		db.addPreferencesToTestDB(t, user.ID, dislikedSongs, db.AddDislike)
 		db.addSongsToTestDB(t, otherSongs)
-		testServer := testServer(db, addDBToArray(make([]types.Song, 0), db))
+		testServer := testServer(t, db, addDBToArray(make([]types.Song, 0), db))
 		response := testhelpers.TestRequest(t, testServer, http.MethodGet, test.path, test.token, nil)
 		if response.Code != test.expectedStatusCode {
 			t.Errorf("%v: Expects statuscode: %v but got: %v\n", name, test.expectedStatusCode, response.Code)

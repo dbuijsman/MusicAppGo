@@ -19,13 +19,18 @@ import (
 	"testing"
 )
 
-func testServer(db database.Database, existingSongs []types.Song) *http.Server {
-	server, _ := handlers.NewLikesServer(testLikesHandler(db, existingSongs), nil, "likes_test", "localhost", 0)
+func testServer(t *testing.T, db database.Database, existingSongs []types.Song) *http.Server {
+	handler := testLikesHandler(t, db, existingSongs)
+	server, _ := handlers.NewLikesServer(handler, nil, "likes_test", "localhost", 0)
 	return server
 }
 
-func testLikesHandler(db database.Database, existingSongs []types.Song) *handlers.LikesHandler {
-	return handlers.NewLikesHandler(testhelpers.TestEmptyLogger(), db, testGetRequest(existingSongs))
+func testLikesHandler(t *testing.T, db database.Database, existingSongs []types.Song) *handlers.LikesHandler {
+	handler, err := handlers.NewLikesHandler(testhelpers.TestEmptyLogger(), db, testGetRequest(existingSongs))
+	if err != nil {
+		t.Fatalf("Can't set up handler for test due to: %s\n", err)
+	}
+	return handler
 }
 
 func testGetRequest(existingSongs []types.Song) func(string) (*http.Response, error) {

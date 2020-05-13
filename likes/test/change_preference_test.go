@@ -72,7 +72,7 @@ func TestChangeHandlers_statusCode(t *testing.T) {
 		db.addPreferencesToTestDB(t, user.ID, likedSongs, db.AddLike)
 		db.addPreferencesToTestDB(t, user.ID, dislikedSongs, db.AddDislike)
 		db.addSongsToTestDB(t, otherSongs)
-		testServer := testServer(db, addDBToArray(missingSongs, db))
+		testServer := testServer(t, db, addDBToArray(missingSongs, db))
 		token := ""
 		if test.credentials != nil {
 			var err error
@@ -130,7 +130,7 @@ func TestChangeHandlers_savingInDB(t *testing.T) {
 		db.addPreferencesToTestDB(t, user.ID, likedSongs, db.AddLike)
 		db.addPreferencesToTestDB(t, user.ID, dislikedSongs, db.AddDislike)
 		db.addSongsToTestDB(t, otherSongs)
-		testServer := testServer(db, addDBToArray(missingSongs, db))
+		testServer := testServer(t, db, addDBToArray(missingSongs, db))
 		token, err := server.CreateToken(test.credentials.ID, test.credentials.Username, test.credentials.Role)
 		if err != nil {
 			t.Errorf("%v: Failed to send token with request: %s\n", name, err)
