@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"fmt"
 	"general/convert"
+	"general/env"
 	"general/types"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -17,13 +19,15 @@ import (
 	"github.com/optiopay/kafka/v2/proto"
 )
 
-var kafkaAddrs = []string{"localhost:9092", "localhost:9093"}
-var gateway, addressGateway = "gateway", ":9919"
+var kafkaFirstAddress = env.SetString("KAFKA_FIRST", false, "localhost:9092")
+var kafkaSecondAddress = env.SetString("KAFKA_SECOND", false, "localhost:9093")
+var gateway = env.SetString("GATEWAY_NAME", false, "gateway")
+var addressGateway = env.SetString("GATEWAY_ADDRESS", false, "http://localhost:9919")
 
 // ConnectToMYSQL connects
-func ConnectToMYSQL(logger *log.Logger, servername, dataSourceName string) (*sql.DB, error) {
+func ConnectToMYSQL(logger *log.Logger, servername, dataSource string) (*sql.DB, error) {
 	// Opening the database
-	db, err := sql.Open("mysql", dataSourceName)
+	db, err := sql.Open("mysql", dataSource)
 	if err != nil {
 		logger.Fatalf("[ERROR] Failed to open connection to %v database: %v\n", servername, err.Error())
 		return nil, err
@@ -36,22 +40,23 @@ func ConnectToMYSQL(logger *log.Logger, servername, dataSourceName string) (*sql
 }
 
 // NewServer returns a server on the given port with the given router, a channel that sends addresses of other services and a start function in order to start the server
-func NewServer(servername, port string, router *mux.Router, broker *kafka.Broker, messageConsumer func(), logger *log.Logger) (server *http.Server, channelNewService chan types.Service, start func()) {
+func NewServer(servername, host string, port int, router *mux.Router, broker *kafka.Broker, messageConsumer func(), logger *log.Logger) (server *http.Server, channelNewService chan types.Service, start func()) {
+	address := host + ":" + strconv.Itoa(port)
 	server = &http.Server{
-		Addr:     port,
+		Addr:     address,
 		Handler:  router,
 		ErrorLog: logger,
 	}
 	channelNewService = make(chan types.Service)
 	start = func() {
 		go getAddressesServices(logger, channelNewService, servername)
-		go registerService(logger, broker, servername, port)
+		go registerService(logger, broker, servername, "http://"+address)
 		go StartConsumer(broker, logger, "newService", getConsumeNewService(logger, channelNewService))
 		if messageConsumer != nil {
 			go messageConsumer()
 		}
 		go func() {
-			logger.Printf("Starting server %v on port %v\n", servername, server.Addr)
+			logger.Printf("Starting server %v on: %v\n", servername, server.Addr)
 			err := server.ListenAndServe()
 			if err != nil {
 				logger.Printf("Shutting down server %v: %s\n", servername, err)
@@ -73,7 +78,7 @@ func NewServer(servername, port string, router *mux.Router, broker *kafka.Broker
 }
 
 func getAddressesServices(logger *log.Logger, channel chan<- types.Service, servername string) {
-	if servername == gateway {
+	if servername == *gateway {
 		return
 	}
 	getRequest, err := GetInternalGETRequest(servername)
@@ -81,7 +86,7 @@ func getAddressesServices(logger *log.Logger, channel chan<- types.Service, serv
 		logger.Printf("[ERROR] Can't create a get request due to: %s\n", err)
 		return
 	}
-	response, err := getRequest(fmt.Sprintf("http://localhost%v/intern/service", addressGateway))
+	response, err := getRequest(fmt.Sprintf("%v/intern/service", addressGateway))
 	if err != nil {
 		logger.Printf("[ERROR] Failed to retrieve other services due to: %s\n", err)
 		return
@@ -101,8 +106,8 @@ func getAddressesServices(logger *log.Logger, channel chan<- types.Service, serv
 	logger.Printf("Obtained all addresses of services\n")
 }
 
-func registerService(logger *log.Logger, broker *kafka.Broker, servername, port string) {
-	messageService, err := convert.ToJSONBytes(&types.Service{Name: servername, Address: port})
+func registerService(logger *log.Logger, broker *kafka.Broker, servername, address string) {
+	messageService, err := convert.ToJSONBytes(&types.Service{Name: servername, Address: address})
 	if err != nil {
 		logger.Fatalf("Can't register service %v due to: %s\n", servername, err)
 	}
@@ -124,6 +129,7 @@ func getConsumeNewService(logger *log.Logger, channel chan<- types.Service) func
 
 // ConnectToKafka creates a connection to Kafka and returns a broker and a closing function
 func ConnectToKafka(logger *log.Logger, servername string) (*kafka.Broker, func()) {
+	kafkaAddrs := []string{*kafkaFirstAddress, *kafkaSecondAddress}
 	conf := kafka.NewBrokerConf(servername)
 	conf.AllowTopicCreation = true
 	broker, err := kafka.Dial(kafkaAddrs, conf)

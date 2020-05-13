@@ -16,17 +16,17 @@ import (
 
 const servername string = "discography"
 
-var portLikes string
+var addressLikes string
 
 // NewMusicServer returns a new server for music and a function that starts up the server
-func NewMusicServer(handler *MusicHandler, broker *kafka.Broker, servername, port string) (newServer *http.Server, start func()) {
-	s, channel, startServer := server.NewServer(servername, port, initRoutes(handler), broker, nil, handler.Logger)
+func NewMusicServer(handler *MusicHandler, broker *kafka.Broker, servername, host string, port int) (newServer *http.Server, start func()) {
+	s, channel, startServer := server.NewServer(servername, host, port, initRoutes(handler), broker, nil, handler.Logger)
 	newServer = s
 	start = func() {
 		go func() {
 			for service := range channel {
 				if service.Name == "likes" {
-					portLikes = service.Address
+					addressLikes = service.Address
 				}
 			}
 		}()

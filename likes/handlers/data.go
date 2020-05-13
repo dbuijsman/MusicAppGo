@@ -15,24 +15,24 @@ import (
 
 const servername string = "likes"
 
-var portDiscography string
+var addressDiscography string
 
 // NewLikesServer returns a new server for likes and dislikes and a function that starts up the server.
 // If broker is nil, then there will be no messages consumed.
-func NewLikesServer(handler *LikesHandler, broker *kafka.Broker, servername, port string) (newServer *http.Server, start func()) {
+func NewLikesServer(handler *LikesHandler, broker *kafka.Broker, servername, host string, port int) (newServer *http.Server, start func()) {
 	var startConsumer func()
 	if broker != nil {
 		startConsumer = func() {
 			handler.StartConsuming(broker)
 		}
 	}
-	s, channel, startServer := server.NewServer(servername, port, initRoutes(handler), broker, startConsumer, handler.Logger)
+	s, channel, startServer := server.NewServer(servername, host, port, initRoutes(handler), broker, startConsumer, handler.Logger)
 	newServer = s
 	start = func() {
 		go func() {
 			for service := range channel {
 				if service.Name == "discography" {
-					portDiscography = service.Address
+					addressDiscography = service.Address
 				}
 			}
 		}()

@@ -16,8 +16,8 @@ import (
 )
 
 // NewUserServer returns a new server for userdata and a function that starts up the server
-func NewUserServer(handler *UserHandler, broker *kafka.Broker, servername string, port string) (newServer *http.Server, start func()) {
-	newServer, _, start = server.NewServer(servername, port, initRoutes(handler), broker, nil, handler.Logger)
+func NewUserServer(handler *UserHandler, broker *kafka.Broker, servername string, host string, port int) (newServer *http.Server, start func()) {
+	newServer, _, start = server.NewServer(servername, host, port, initRoutes(handler), broker, nil, handler.Logger)
 	return
 }
 

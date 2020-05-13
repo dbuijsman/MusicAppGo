@@ -41,6 +41,6 @@ func main() {
 	if err != nil {
 		logger.Fatalf("[ERROR] Can't create handler due to: %s\n", err)
 	}
-	_, startServer := handlers.NewUserServer(handler, broker, *servername, ":"+string(*serverport))
+	_, startServer := handlers.NewUserServer(handler, broker, *servername, *serverhost, *serverport)
 	startServer()
 }

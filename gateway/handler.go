@@ -15,8 +15,8 @@ import (
 )
 
 // NewGatewayServer returns a new server that will be functioning as a API gateway and a function that starts up the server
-func NewGatewayServer(handler *GatewayHandler, broker *kafka.Broker, servername, port string) (newServer *http.Server, start func()) {
-	s, channel, startServer := server.NewServer(servername, port, initRoutes(handler), broker, nil, handler.logger)
+func NewGatewayServer(handler *GatewayHandler, broker *kafka.Broker, servername, host string, port int) (newServer *http.Server, start func()) {
+	s, channel, startServer := server.NewServer(servername, host, port, initRoutes(handler), broker, nil, handler.logger)
 	newServer = s
 	start = func() {
 		go func() {
@@ -75,7 +75,7 @@ func (handler *GatewayHandler) redirect(serviceName string) func(http.ResponseWr
 			return
 		}
 		cookie, cookieErr := request.Cookie("token")
-		target := "http://localhost" + service.Address + request.URL.Path
+		target := service.Address + request.URL.Path
 		if len(request.URL.RawQuery) > 0 {
 			target += "?" + request.URL.RawQuery
 		}

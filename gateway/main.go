@@ -29,6 +29,6 @@ func main() {
 	if err != nil {
 		logger.Fatalf("[ERROR] Can't create handler due to: %s\n", err)
 	}
-	_, startServer := NewGatewayServer(handler, broker, *servername, ":"+string(*serverport))
+	_, startServer := NewGatewayServer(handler, broker, *servername, *serverhost, *serverport)
 	startServer()
 }
