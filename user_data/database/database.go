@@ -7,12 +7,12 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"general/dberror"
+	"general/env"
 	"general/types"
 	"io"
 )
 
-// This key will be exported to a file
-const key string = "WlAye5L1uzZq61p41A6PyhpBxsnklABk6FPAOeOXUwqWuouUEvTG8Apqkqo1uloZ"
+var key = env.SetString("KEY_HASH", true, "", "Key for hashing credentials before storing them in the database")
 
 // Database will be used to extract dependencies on db
 type Database interface {
@@ -56,7 +56,7 @@ func generateSalt() []byte {
 }
 
 func hashPass(password string, salt string) string {
-	hash := hmac.New(sha512.New, []byte(key))
+	hash := hmac.New(sha512.New, []byte(*key))
 	io.WriteString(hash, password+salt)
 	return base64.URLEncoding.EncodeToString(hash.Sum(nil))
 }
