@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"MusicAppGo/general/env"
 	"discography/database"
 	"errors"
+	"general/env"
 	"general/server"
 	"log"
 	"net/http"
