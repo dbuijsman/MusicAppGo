@@ -20,14 +20,14 @@ func toMiddlerWare(functionAsMiddleWare func(http.ResponseWriter, *http.Request,
 func GetValidateTokenMiddleWare(logger *log.Logger) func(http.Handler) http.Handler {
 	return toMiddlerWare(func(response http.ResponseWriter, request *http.Request, next http.Handler) {
 		if request.Header["Token"] == nil {
-			logger.Printf("[WARNING] Unauthorized request\n")
-			http.Error(response, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			logger.Printf("[WARNING] Unauthorized request at %v\n", request.URL.Path)
+			SendError(response, http.StatusUnauthorized)
 			return
 		}
 		token, err := validateToken(request.Header["Token"][0])
 		if err != nil {
-			logger.Printf("[WARNING] Request with invalid token: %s\n", err)
-			http.Error(response, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			logger.Printf("[WARNING] Unauthorized request at %v with invalid token: %s\n", request.URL.Path, err)
+			SendError(response, http.StatusUnauthorized)
 			return
 		}
 		ctx := context.WithValue(request.Context(), types.Credentials{}, token)
@@ -45,7 +45,7 @@ func GetAddTokenToContextMiddleware(logger *log.Logger) func(http.Handler) http.
 		}
 		token, err := validateToken(request.Header["Token"][0])
 		if err != nil {
-			logger.Printf("[WARNING] request with invalid token: %s\n", err)
+			logger.Printf("[WARNING] Request at %v with invalid token: %s\n", request.URL.Path, err)
 			next.ServeHTTP(response, request)
 			return
 		}
@@ -72,8 +72,8 @@ func GetTokenMiddleWareForSpecificRole(logger *log.Logger, role string) func(htt
 		return tokenValidator(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 			ctx := request.Context().Value(types.Credentials{}).(types.Credentials)
 			if ctx.Role != role {
-				logger.Printf("[WARNING] Non-%v tries to access %v content: %v\n", role, role, ctx.Username)
-				http.Error(response, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+				logger.Printf("[WARNING] Non-%v tries to access %v content at %v: %v\n", role, role, request.URL.Path, ctx.Username)
+				SendError(response, http.StatusUnauthorized)
 				return
 			}
 			next.ServeHTTP(response, request)

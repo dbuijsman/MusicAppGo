@@ -15,10 +15,11 @@ func (handler *MusicHandler) FindSongByID(response http.ResponseWriter, request 
 	songIDstring := mux.Vars(request)["id"]
 	songID, err := strconv.Atoi(songIDstring)
 	if err != nil {
-		handler.Logger.Printf("Received request with invalid id %v results in: %s\n", songIDstring, err)
+		handler.Logger.Printf("FindSongByID: Received request with invalid id %v results in: %s\n", songIDstring, err)
 		server.SendError(response, http.StatusBadRequest)
 		return
 	}
+	handler.Logger.Printf("Received request for finding song #%v\n", songID)
 	song, searchErr := handler.db.FindSongByID(songID)
 	if searchErr != nil {
 		if searchErr.(dberror.DBError).ErrorCode != dberror.NotFoundError {
@@ -26,7 +27,7 @@ func (handler *MusicHandler) FindSongByID(response http.ResponseWriter, request 
 			server.SendError(response, http.StatusInternalServerError)
 			return
 		}
-		handler.Logger.Printf("Can't find song #%v\n", songID)
+		handler.Logger.Printf("Song #%v doesn't exists\n", songID)
 		server.SendError(response, http.StatusNotFound)
 		return
 	}
@@ -48,6 +49,7 @@ func (handler *MusicHandler) FindArtistByID(response http.ResponseWriter, reques
 		server.SendError(response, http.StatusBadRequest)
 		return
 	}
+	handler.Logger.Printf("Received request for finding artist #%v\n", artistID)
 	artist, searchErr := handler.db.FindArtistByID(artistID)
 	if searchErr != nil {
 		if searchErr.(dberror.DBError).ErrorCode != dberror.NotFoundError {

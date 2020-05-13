@@ -14,7 +14,7 @@ func (handler *MusicHandler) AddArtistHandler(response http.ResponseWriter, requ
 	var newArtist ClientArtist
 	if err := convert.ReadFromJSON(&newArtist, request.Body); err != nil {
 		badRequests.Inc()
-		handler.Logger.Printf("Got invalid request to add a new artist: %v\n", err)
+		handler.Logger.Printf("Got invalid request to add a new artist: %s\n", err)
 		server.SendError(response, http.StatusBadRequest)
 		return
 	}
