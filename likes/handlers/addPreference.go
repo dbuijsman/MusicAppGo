@@ -11,7 +11,7 @@ import (
 )
 
 func (handler *LikesHandler) obtainSongOrSendError(response http.ResponseWriter, songID int) bool {
-	resp, err := handler.GETRequest(fmt.Sprintf("http://localhost%v/intern/song/%v", portDiscography, songID))
+	resp, err := handler.GETRequest(fmt.Sprintf("%v/intern/song/%v", addressDiscography, songID))
 	if resp.StatusCode == http.StatusNotFound {
 		handler.Logger.Printf("Song #%v doesn't exist!\n", songID)
 		server.SendError(response, http.StatusNotFound)

@@ -15,7 +15,7 @@ import (
 
 func testServerNoRequest(t *testing.T, db database.Database) (*http.Server, chan testhelpers.Message) {
 	handler, channel := testMusicHandlerNoRequest(t, db)
-	testServer, _ := handlers.NewMusicServer(handler, nil, "music_test", "")
+	testServer, _ := handlers.NewMusicServer(handler, nil, "music_test", "localhost", 0)
 	return testServer, channel
 }
 

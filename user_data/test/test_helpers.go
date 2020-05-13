@@ -18,7 +18,7 @@ func testServer(t *testing.T, db database.Database) (*http.Server, chan testhelp
 	if err != nil {
 		t.Fatalf("Failed to create a testServer due to: %s\n", err)
 	}
-	newServer, _ := handlers.NewUserServer(handler, nil, "user_data_test", "")
+	newServer, _ := handlers.NewUserServer(handler, nil, "user_data_test", "", 0)
 	return newServer, channel
 }
 

@@ -74,7 +74,7 @@ func (handler *MusicHandler) SongsFromArtist(response http.ResponseWriter, reque
 			return
 		}
 		userID := user.(types.Credentials).ID
-		resp, err := handler.GETRequest(fmt.Sprintf("http://localhost%v/intern/preference/%v/%v", portLikes, userID, nameArtist))
+		resp, err := handler.GETRequest(fmt.Sprintf("%v/intern/preference/%v/%v", addressLikes, userID, nameArtist))
 		if err != nil || resp.StatusCode != http.StatusOK {
 			handler.Logger.Printf("Failed to obtain preferences of user #%v for artist %v due to: %s\n", userID, nameArtist, err)
 			return

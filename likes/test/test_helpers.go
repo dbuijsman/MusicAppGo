@@ -20,7 +20,7 @@ import (
 )
 
 func testServer(db database.Database, existingSongs []types.Song) *http.Server {
-	server, _ := handlers.NewLikesServer(testLikesHandler(db, existingSongs), nil, "likes_test", "")
+	server, _ := handlers.NewLikesServer(testLikesHandler(db, existingSongs), nil, "likes_test", "localhost", 0)
 	return server
 }
 
