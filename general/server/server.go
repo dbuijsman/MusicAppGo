@@ -24,18 +24,16 @@ var kafkaSecondAddress = env.SetString("KAFKA_SECOND", false, "localhost:9093", 
 var gateway = env.SetString("GATEWAY_NAME", false, "gateway", "Name of the API gateway service")
 var addressGateway = env.SetString("GATEWAY_ADDRESS", false, "http://localhost:9919", "Address of the API gateway service. Needed for getting a list of all services")
 
-// ConnectToMYSQL connects
+// ConnectToMYSQL opens a connection with a MYSQL database using datasource. If the connection can't be opened
 func ConnectToMYSQL(logger *log.Logger, servername, dataSource string) (*sql.DB, error) {
-	// Opening the database
 	db, err := sql.Open("mysql", dataSource)
 	if err != nil {
-		logger.Fatalf("[ERROR] Failed to open connection to %v database: %v\n", servername, err.Error())
-		return nil, err
+		return nil, fmt.Errorf("Failed to open connection to %v database: %v", servername, err.Error())
 	}
 	if err = db.Ping(); err != nil {
-		logger.Fatalf("[ERROR] Failed to open connection to %v database: %v\n", servername, err.Error())
-		return nil, err
+		return nil, fmt.Errorf("Failed to open connection to %v database: %v", servername, err.Error())
 	}
+	logger.Printf("Connected service %v to database\n", servername)
 	return db, nil
 }
 
@@ -81,6 +79,7 @@ func getAddressesServices(logger *log.Logger, channel chan<- types.Service, serv
 	if servername == *gateway {
 		return
 	}
+	logger.Printf("Trying to obtain addresses of other services\n")
 	getRequest, err := GetInternalGETRequest(servername)
 	if err != nil {
 		logger.Printf("[ERROR] Can't create a get request due to: %s\n", err)
@@ -100,10 +99,10 @@ func getAddressesServices(logger *log.Logger, channel chan<- types.Service, serv
 		logger.Printf("[ERROR] Failed to decode response of getting a list of services: %s\n", err)
 		return
 	}
+	logger.Printf("Obtained all addresses of services\n")
 	for _, service := range services {
 		channel <- service
 	}
-	logger.Printf("Obtained all addresses of services\n")
 }
 
 func registerService(logger *log.Logger, broker *kafka.Broker, servername, address string) {
@@ -111,8 +110,9 @@ func registerService(logger *log.Logger, broker *kafka.Broker, servername, addre
 	if err != nil {
 		logger.Fatalf("Can't register service %v due to: %s\n", servername, err)
 	}
-	sendMessage := GetSendMessage(broker.Producer(kafka.NewProducerConf()))
+	sendMessage := GetSendMessage(broker)
 	sendMessage("newService", messageService)
+	logger.Printf("Sended address to newService")
 }
 
 func getConsumeNewService(logger *log.Logger, channel chan<- types.Service) func(message []byte) {
@@ -158,11 +158,13 @@ func CreateTopics(broker *kafka.Broker, logger *log.Logger, topics ...string) er
 		}
 		logger.Printf("Topic %v is now available for messaging\n", topicError.Topic)
 	}
+	logger.Printf("Succesfully created all topics\n")
 	return nil
 }
 
 // GetSendMessage returns a function that can be used for sending messages to kafka
-func GetSendMessage(producer kafka.Producer) func(topic string, message []byte) error {
+func GetSendMessage(broker *kafka.Broker) func(topic string, message []byte) error {
+	producer := broker.Producer(kafka.NewProducerConf())
 	return func(topic string, message []byte) error {
 		msg := &proto.Message{Value: []byte(message)}
 		_, err := producer.Produce(topic, 0, msg)
@@ -204,7 +206,6 @@ func StartConsumer(broker *kafka.Broker, logger *log.Logger, topic string, proce
 		logger.Printf("[Warning] Cannot create kafka consumer for %v:%s\nTrying to create topic...\n", topic, err)
 		if topicErr := CreateTopics(broker, logger, topic); topicErr != nil {
 			logger.Fatalf("[ERROR] Failed to create topics due to: %s\n", topicErr)
-			return
 		}
 	}
 	logger.Printf("Starting to consume messages from topic %v\n", topic)

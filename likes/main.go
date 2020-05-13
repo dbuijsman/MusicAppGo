@@ -24,14 +24,19 @@ func main() {
 	logger := log.New(os.Stdout, *servername, log.LstdFlags|log.Lshortfile)
 	db, err := server.ConnectToMYSQL(logger, *servername, fmt.Sprintf("%v:%v@tcp(127.0.0.1:3306)/%v", *dbUsername, *dbPass, *dbName))
 	if err != nil {
-		logger.Printf("Stop starting server")
-		return
+		logger.Fatalf("[ERROR] %s\n", err)
 	}
 	defer db.Close()
 	broker, closeBroker := server.ConnectToKafka(logger, *servername)
 	defer closeBroker()
-	logger.Printf("Handler is ready for sending get requests")
-	handler := handlers.NewLikesHandler(logger, database.NewLikesDB(db), nil)
+	get, err := server.GetInternalGETRequest(*servername)
+	if err != nil {
+		logger.Fatalf("Can't create a client for sending get requests: %s\n", err)
+	}
+	handler, err := handlers.NewLikesHandler(logger, database.NewLikesDB(db), get)
+	if err != nil {
+		logger.Fatalf("[ERROR] Can't create handler due to: %s\n", err)
+	}
 	_, startServer := handlers.NewLikesServer(handler, broker, *servername, *serverhost, *serverport)
 	startServer()
 }

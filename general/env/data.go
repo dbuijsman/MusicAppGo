@@ -114,6 +114,7 @@ func readConfigFile(path string) map[string]string {
 	if path == "" {
 		return cc.Config
 	}
+	log.Printf("Opening configuration file %v...\n", path)
 	file, err := os.Open(path)
 	if err != nil {
 		if path != defaultValueConfig {
@@ -126,6 +127,7 @@ func readConfigFile(path string) map[string]string {
 	if err = convert.ReadFromYAMLNoValidation(&cc, file); err != nil {
 		log.Fatalf("Failed to decode config file: %s\n", err)
 	}
+	log.Printf("Succesfully decoded configuration file %v\n", path)
 	return cc.Config
 }
 
@@ -138,6 +140,7 @@ func Parse() {
 	}
 	configFromFile := readConfigFile(path)
 	errors := make([]string, 0)
+	log.Printf("Setting all env variables")
 	for _, variable := range envVariables {
 		if err := processEnvVar(variable); err != nil {
 			errors = append(errors, fmt.Sprintf("%v: Got invalid value for type %v: %s\n", variable.name, variable.varType, err))
@@ -155,11 +158,11 @@ func Parse() {
 			errors = append(errors, fmt.Sprintf("%v: %s\n", variable.name, err))
 		}
 	}
-
 	if len(errors) > 0 {
 		errString := strings.Join(errors, "\n")
 		log.Fatalf("Failed to process configurations due to: \n%s\n", errString)
 	}
+	log.Printf("Succesfully set all env variables\n")
 }
 
 // Help returns config flag and a list of all environment variables.

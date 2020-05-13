@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"MusicAppGo/general/env"
 	"discography/database"
 	"errors"
 	"general/server"
@@ -14,8 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-const servername string = "discography"
-
+var nameLikes = env.SetString("DEP_LIKES_NAME", false, "likes", "Name of the likes service. Needed for adding preferences to songs")
 var addressLikes string
 
 // NewMusicServer returns a new server for music and a function that starts up the server
@@ -25,7 +25,7 @@ func NewMusicServer(handler *MusicHandler, broker *kafka.Broker, servername, hos
 	start = func() {
 		go func() {
 			for service := range channel {
-				if service.Name == "likes" {
+				if service.Name == *nameLikes {
 					addressLikes = service.Address
 				}
 			}
@@ -74,19 +74,17 @@ func NewMusicHandler(logger *log.Logger, db database.Database, sendMessage func(
 		return nil, errors.New("sendMessage can't be nil")
 	}
 	if get == nil {
-		var err error
-		get, err = server.GetInternalGETRequest(servername)
-		if err != nil {
-			return nil, err
-		}
+		return nil, errors.New("get can't be nil")
 	}
-	return &MusicHandler{Logger: logger, db: db, GETRequest: get, SendMessage: func(topic string, message []byte) {
-		if err := sendMessage(topic, message); err != nil {
-			logger.Printf("Topic %v: Can't send message %s: %v\n", topic, message, err)
-			return
-		}
-		logger.Printf("Topic %v: Send message: %s\n", topic, message)
-	}}, nil
+	return &MusicHandler{Logger: logger, db: db, GETRequest: get,
+		SendMessage: func(topic string, message []byte) {
+			if err := sendMessage(topic, message); err != nil {
+				logger.Printf("Topic %v: Can't send message %s: %v\n", topic, message, err)
+				return
+			}
+			logger.Printf("Topic %v: Send message: %s\n", topic, message)
+		},
+	}, nil
 }
 
 // ClientArtist is the form that is used in posting a new artist from the client side

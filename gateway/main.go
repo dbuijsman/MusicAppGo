@@ -6,8 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-
-	"github.com/optiopay/kafka/v2"
 )
 
 var servername = env.SetString("SERVER_NAME", false, "gateway", "Name of the gateway service")
@@ -22,8 +20,7 @@ func main() {
 	if topicErr := server.CreateTopics(broker, logger, "newService"); topicErr != nil {
 		logger.Fatalf("[ERROR] Failed to create topics due to: %s\n", topicErr)
 	}
-	sendMessage := server.GetSendMessage(broker.Producer(kafka.NewProducerConf()))
-	handler, err := NewGatewayHandler(logger, http.Client{}, sendMessage)
+	handler, err := NewGatewayHandler(logger, http.Client{}, server.GetSendMessage(broker))
 	if err != nil {
 		logger.Fatalf("[ERROR] Can't create handler due to: %s\n", err)
 	}

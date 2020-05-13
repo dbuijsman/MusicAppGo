@@ -9,8 +9,6 @@ import (
 	"user_data/database"
 	"user_data/handlers"
 
-	"github.com/optiopay/kafka/v2"
-
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -26,8 +24,7 @@ func main() {
 	logger := log.New(os.Stdout, *servername, log.LstdFlags|log.Lshortfile)
 	db, err := server.ConnectToMYSQL(logger, *servername, fmt.Sprintf("%v:%v@tcp(127.0.0.1:3306)/%v", *dbUsername, *dbPass, *dbName))
 	if err != nil {
-		logger.Printf("Stop starting server")
-		return
+		logger.Fatalf("[ERROR] %s\n", err)
 	}
 	defer db.Close()
 	broker, closeBroker := server.ConnectToKafka(logger, *servername)
@@ -35,7 +32,7 @@ func main() {
 	if topicErr := server.CreateTopics(broker, logger, "newUser", "login"); topicErr != nil {
 		logger.Fatalf("[ERROR] Failed to create topics due to: %s\n", topicErr)
 	}
-	handler, err := handlers.NewUserHandler(logger, database.NewUserDB(db), server.GetSendMessage(broker.Producer(kafka.NewProducerConf())))
+	handler, err := handlers.NewUserHandler(logger, database.NewUserDB(db), server.GetSendMessage(broker))
 	if err != nil {
 		logger.Fatalf("[ERROR] Can't create handler due to: %s\n", err)
 	}

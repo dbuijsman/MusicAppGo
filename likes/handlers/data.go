@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"errors"
+	"general/env"
 	"general/server"
 	"likes/database"
 	"log"
@@ -13,8 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-const servername string = "likes"
-
+var nameDiscography = env.SetString("DEP_DISCOGRAPHY_NAME", false, "likes", "Name of the discography service. Needed for adding missing data")
 var addressDiscography string
 
 // NewLikesServer returns a new server for likes and dislikes and a function that starts up the server.
@@ -31,7 +32,7 @@ func NewLikesServer(handler *LikesHandler, broker *kafka.Broker, servername, hos
 	start = func() {
 		go func() {
 			for service := range channel {
-				if service.Name == "discography" {
+				if service.Name == *nameDiscography {
 					addressDiscography = service.Address
 				}
 			}
@@ -75,17 +76,12 @@ type LikesHandler struct {
 	GETRequest func(string) (*http.Response, error)
 }
 
-//NewLikesHandler returns a MusicHandler.
-// If get is nil, then DefaultGETRequest will be used with the default servername
-func NewLikesHandler(logger *log.Logger, db database.Database, get func(string) (*http.Response, error)) *LikesHandler {
+//NewLikesHandler returns a MusicHandler. Get can't be nil
+func NewLikesHandler(logger *log.Logger, db database.Database, get func(string) (*http.Response, error)) (*LikesHandler, error) {
 	if get == nil {
-		var err error
-		get, err = server.GetInternalGETRequest(servername)
-		if err != nil {
-			logger.Fatalf("Can't create a client for sending get requests: %s\n", err)
-		}
+		return nil, errors.New("get can't be nil")
 	}
-	return &LikesHandler{Logger: logger, db: db, GETRequest: get}
+	return &LikesHandler{Logger: logger, db: db, GETRequest: get}, nil
 }
 
 var (

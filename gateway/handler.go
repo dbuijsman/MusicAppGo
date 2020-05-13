@@ -68,9 +68,10 @@ func NewGatewayHandler(logger *log.Logger, client http.Client, sendMessage func(
 }
 func (handler *GatewayHandler) redirect(serviceName string) func(http.ResponseWriter, *http.Request) {
 	return func(response http.ResponseWriter, request *http.Request) {
+		handler.logger.Printf("Received request for service %v at %v\n", serviceName, request.URL.Path)
 		service, ok := handler.services[serviceName]
 		if !ok {
-			handler.logger.Printf("Failed to redirect request due to missing service: %v\n", serviceName)
+			handler.logger.Printf("[ERROR] Failed to redirect request due to missing service: %v\n", serviceName)
 			server.SendError(response, http.StatusInternalServerError)
 			return
 		}
@@ -79,7 +80,6 @@ func (handler *GatewayHandler) redirect(serviceName string) func(http.ResponseWr
 		if len(request.URL.RawQuery) > 0 {
 			target += "?" + request.URL.RawQuery
 		}
-		log.Printf("Redirect request to: %s", target)
 		body := new(bytes.Buffer)
 		body.ReadFrom(request.Body)
 		bodyRequest, writer := io.Pipe()
@@ -87,21 +87,24 @@ func (handler *GatewayHandler) redirect(serviceName string) func(http.ResponseWr
 			writer.Write(body.Bytes())
 			writer.Close()
 		}()
+		handler.logger.Printf("Creating request to %v\n", target)
 		req, err := http.NewRequest(request.Method, target, bodyRequest)
 		if cookieErr == nil {
 			req.Header.Add("Token", cookie.Value)
 		}
 		if err != nil {
-			handler.logger.Printf("Failed to create request: %s\n", err)
+			handler.logger.Printf("[ERROR] Failed to create request: %s\n", err)
 			server.SendError(response, http.StatusInternalServerError)
 			return
 		}
+		handler.logger.Printf("Request created\nSending request...\n")
 		resp, err := handler.client.Do(req)
 		if err != nil {
-			handler.logger.Printf("Failed to redirect request: %s\n", err)
+			handler.logger.Printf("[ERROR] Failed to redirect request: %s\n", err)
 			server.SendError(response, http.StatusInternalServerError)
 			return
 		}
+		handler.logger.Printf("Received response from %v with statuscode: %v\n", target, resp.StatusCode)
 		response.WriteHeader(resp.StatusCode)
 		buf := new(bytes.Buffer)
 		buf.ReadFrom(resp.Body)
