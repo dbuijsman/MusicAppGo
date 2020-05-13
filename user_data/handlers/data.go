@@ -15,10 +15,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-const servername string = "users"
-
 // NewUserServer returns a new server for userdata and a function that starts up the server
-func NewUserServer(handler *UserHandler, broker *kafka.Broker, servername, port string) (newServer *http.Server, start func()) {
+func NewUserServer(handler *UserHandler, broker *kafka.Broker, servername string, port string) (newServer *http.Server, start func()) {
 	newServer, _, start = server.NewServer(servername, port, initRoutes(handler), broker, nil, handler.Logger)
 	return
 }
