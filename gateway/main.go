@@ -10,14 +10,12 @@ import (
 	"github.com/optiopay/kafka/v2"
 )
 
-var servername = env.SetString("SERVER_NAME", false, "gateway")
-var serverhost = env.SetString("SERVER_HOST", false, "localhost")
-var serverport = env.SetInt("SERVER_PORT", false, 9919)
+var servername = env.SetString("SERVER_NAME", false, "gateway", "Name of the gateway service")
+var serverhost = env.SetString("SERVER_HOST", false, "localhost", "Host of the gateway service")
+var serverport = env.SetInt("SERVER_PORT", false, 9919, "Port of the gateway service")
 
 func main() {
-	if err := env.Parse(); err != nil {
-		log.Fatalf("Failed to process configurations due to: \n%s\n", err)
-	}
+	env.Parse()
 	logger := log.New(os.Stdout, *servername, log.LstdFlags|log.Lshortfile)
 	broker, closeBroker := server.ConnectToKafka(logger, *servername)
 	defer closeBroker()

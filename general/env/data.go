@@ -12,6 +12,8 @@ import (
 )
 
 var envVariables []envVar
+var defaultValueConfig = "./config.yml"
+var help = flag.Bool("help", false, "--help to show env help")
 
 func init() {
 	envVariables = make([]envVar, 0)
@@ -28,13 +30,14 @@ type envVar struct {
 	varType      string
 	required     bool
 	defaultValue interface{}
+	help         string
 	setValue     func(interface{}, string) error
 	setDefault   func(interface{}, interface{})
 	validate     func(interface{}, bool) error
 }
 
 // SetString sets the default value of the environment variable with the given name
-func SetString(name string, required bool, defaultValue string) *string {
+func SetString(name string, required bool, defaultValue string, help string) *string {
 	pointer := new(string)
 	envVariables = append(envVariables, envVar{
 		name:         name,
@@ -42,6 +45,7 @@ func SetString(name string, required bool, defaultValue string) *string {
 		varType:      "string",
 		required:     required,
 		defaultValue: defaultValue,
+		help:         help,
 		setValue: func(variable interface{}, value string) error {
 			*variable.(*string) = value
 			return nil
@@ -60,7 +64,7 @@ func SetString(name string, required bool, defaultValue string) *string {
 }
 
 // SetInt sets the default value of the environment variable with the given name
-func SetInt(name string, required bool, defaultValue int) *int {
+func SetInt(name string, required bool, defaultValue int, help string) *int {
 	pointer := new(int)
 	envVariables = append(envVariables, envVar{
 		name:         name,
@@ -68,6 +72,7 @@ func SetInt(name string, required bool, defaultValue int) *int {
 		varType:      "int",
 		required:     required,
 		defaultValue: defaultValue,
+		help:         help,
 		setValue: func(variable interface{}, value string) error {
 			valueInt, err := strconv.ParseInt(value, 0, 64)
 			if err != nil {
@@ -100,7 +105,7 @@ func processEnvVar(e envVar) error {
 }
 
 func parseFlags() (configPath string) {
-	flag.StringVar(&configPath, "config", "", "path to configuration file")
+	flag.StringVar(&configPath, "config", defaultValueConfig, "path to configuration file")
 	flag.Parse()
 	return configPath
 }
@@ -111,7 +116,11 @@ func readConfigFile(path string) map[string]string {
 	}
 	file, err := os.Open(path)
 	if err != nil {
-		log.Fatalf("Failed to open config file: %s\n", err)
+		if path != defaultValueConfig {
+			log.Fatalf("[ERROR] Failed to open config file %v due to: %s\n", path, err)
+		}
+		log.Printf("[WARNING] Failed to open config file: %s\nContinues without config\n", err)
+		return cc.Config
 	}
 	defer file.Close()
 	if err = convert.ReadFromYAMLNoValidation(&cc, file); err != nil {
@@ -121,8 +130,13 @@ func readConfigFile(path string) map[string]string {
 }
 
 // Parse parses the env
-func Parse() error {
-	configFromFile := readConfigFile(parseFlags())
+func Parse() {
+	path := parseFlags()
+	if *help {
+		Help()
+		os.Exit(0)
+	}
+	configFromFile := readConfigFile(path)
 	errors := make([]string, 0)
 	for _, variable := range envVariables {
 		if err := processEnvVar(variable); err != nil {
@@ -144,7 +158,23 @@ func Parse() error {
 
 	if len(errors) > 0 {
 		errString := strings.Join(errors, "\n")
-		return fmt.Errorf(errString)
+		log.Fatalf("Failed to process configurations due to: \n%s\n", errString)
 	}
-	return nil
+}
+
+// Help returns config flag and a list of all environment variables.
+func Help() {
+	fmt.Printf("Configuration variables are using environment variables.\n Use flag -config for adding a configuration file. Default path: %v\n\n", defaultValueConfig)
+	fmt.Print("Environment variables:\n")
+	for _, variable := range envVariables {
+		def := fmt.Sprintf("'%v'", variable.defaultValue)
+		if def == "''" {
+			def = "no default"
+		}
+		req := ""
+		if variable.required {
+			req = ", required"
+		}
+		fmt.Printf("%v: %v, default: %v%v\n	%v\n", variable.name, variable.varType, def, req, variable.help)
+	}
 }

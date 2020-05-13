@@ -19,10 +19,10 @@ import (
 	"github.com/optiopay/kafka/v2/proto"
 )
 
-var kafkaFirstAddress = env.SetString("KAFKA_FIRST", false, "localhost:9092")
-var kafkaSecondAddress = env.SetString("KAFKA_SECOND", false, "localhost:9093")
-var gateway = env.SetString("GATEWAY_NAME", false, "gateway")
-var addressGateway = env.SetString("GATEWAY_ADDRESS", false, "http://localhost:9919")
+var kafkaFirstAddress = env.SetString("KAFKA_FIRST", false, "localhost:9092", "Address for connecting to kafka")
+var kafkaSecondAddress = env.SetString("KAFKA_SECOND", false, "localhost:9093", "Address for connecting to kafka")
+var gateway = env.SetString("GATEWAY_NAME", false, "gateway", "Name of the API gateway service")
+var addressGateway = env.SetString("GATEWAY_ADDRESS", false, "http://localhost:9919", "Address of the API gateway service. Needed for getting a list of all services")
 
 // ConnectToMYSQL connects
 func ConnectToMYSQL(logger *log.Logger, servername, dataSource string) (*sql.DB, error) {

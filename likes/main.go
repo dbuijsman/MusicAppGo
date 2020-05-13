@@ -12,17 +12,15 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-var servername = env.SetString("SERVER_NAME", false, "likes")
-var serverhost = env.SetString("SERVER_HOST", false, "localhost")
-var serverport = env.SetInt("SERVER_PORT", false, 9004)
-var dbName = env.SetString("DB_NAME", true, "")
-var dbUsername = env.SetString("DB_USERNAME", true, "")
-var dbPass = env.SetString("DB_PASSWORD", true, "")
+var servername = env.SetString("SERVER_NAME", false, "likes", "Name of the likes service")
+var serverhost = env.SetString("SERVER_HOST", false, "localhost", "Host of the likes service")
+var serverport = env.SetInt("SERVER_PORT", false, 9004, "Port of the likes service")
+var dbName = env.SetString("DB_NAME", true, "", "Name of the database for the likes service")
+var dbUsername = env.SetString("DB_USERNAME", true, "", "Username for connecting with the database")
+var dbPass = env.SetString("DB_PASSWORD", true, "", "Password for connecting with the database")
 
 func main() {
-	if err := env.Parse(); err != nil {
-		log.Fatalf("Failed to process configurations due to: \n%s\n", err)
-	}
+	env.Parse()
 	logger := log.New(os.Stdout, *servername, log.LstdFlags|log.Lshortfile)
 	db, err := server.ConnectToMYSQL(logger, *servername, fmt.Sprintf("%v:%v@tcp(127.0.0.1:3306)/%v", *dbUsername, *dbPass, *dbName))
 	if err != nil {
